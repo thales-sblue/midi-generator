@@ -31,6 +31,11 @@ O serializer de integração converte o mesmo plano no `Integration Payload v1`,
                          ┌─> MidiExporter -> .mid
 MelodyRequest -> geração -> CompositionPlan
                          └─> Integration Payload v1
+                                      ↑
+                                      │
+                                  MCP Server
+                                      ↑
+                                  MCP Client
 ```
 
 O contrato está em `midi_generator.integration` e pode ser usado sem exportar MIDI:
@@ -44,6 +49,50 @@ request = MelodyRequest(120, "C", "minor", 4, 42)
 payload = composition_to_payload(generate_plan(request))
 assert payload["schema_version"] == 1
 ```
+
+## Servidor MCP
+
+O servidor MCP expõe a tool `generate_melody` pelo transporte local `stdio`. Ele é somente uma camada de comunicação: constrói um `MelodyRequest`, reutiliza `generate_plan()` e serializa o resultado com `composition_to_payload()`. A composição continua pertencendo ao motor e não há integração com Ableton nesta etapa.
+
+Com o ambiente virtual ativado, inicie o servidor:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m midi_generator.mcp
+```
+
+Um cliente MCP pode chamar `generate_melody` com:
+
+```json
+{
+  "bpm": 120,
+  "root_note": "C",
+  "scale": "minor",
+  "bars": 4,
+  "seed": 42
+}
+```
+
+A resposta estruturada usa diretamente o Integration Payload v1:
+
+```json
+{
+  "schema_version": 1,
+  "bpm": 120,
+  "root_note": "C",
+  "scale": "minor",
+  "bars": 4,
+  "seed": 42,
+  "total_duration_ticks": 7680,
+  "notes": [
+    {"pitch": 74, "start": 2160, "duration": 240, "velocity": 60, "channel": 0, "track": 0}
+  ],
+  "report": {"note_count": 6, "pause_count": 9, "duration_ticks": 7680, "scale": "minor", "seed": 42, "warnings": []},
+  "metadata": {"ticks_per_beat": 480, "time_signature": "4/4"}
+}
+```
+
+O array `notes` acima está resumido; a resposta real contém todos os eventos gerados.
 
 ## Testes
 
