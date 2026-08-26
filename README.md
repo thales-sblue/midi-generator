@@ -25,8 +25,24 @@ O gerador usa uma grade de colcheias em 4/4, inclui pausas, varia velocity e lim
 
 O motor de composição é independente de bibliotecas MIDI: ele transforma um `MelodyRequest` em um `CompositionPlan` formado por `NoteEvent`s. O `MidiExporter` é a única camada que usa Mido para converter esse plano em arquivo `.mid`.
 
+O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
+
 ```text
-MelodyRequest -> geração -> CompositionPlan -> MidiExporter -> .mid
+                         ┌─> MidiExporter -> .mid
+MelodyRequest -> geração -> CompositionPlan
+                         └─> Integration Payload v1
+```
+
+O contrato está em `midi_generator.integration` e pode ser usado sem exportar MIDI:
+
+```python
+from midi_generator.domain import MelodyRequest
+from midi_generator.generation import generate_plan
+from midi_generator.integration import composition_to_payload
+
+request = MelodyRequest(120, "C", "minor", 4, 42)
+payload = composition_to_payload(generate_plan(request))
+assert payload["schema_version"] == 1
 ```
 
 ## Testes
@@ -35,3 +51,5 @@ MelodyRequest -> geração -> CompositionPlan -> MidiExporter -> .mid
 $env:PYTHONPATH = "src"
 python -m pytest
 ```
+
+O mesmo comando é executado pelo GitHub Actions em pushes e pull requests.
