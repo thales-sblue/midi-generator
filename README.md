@@ -367,8 +367,8 @@ Todos os parâmetros e o snapshot source são validados, e a transformação com
 
 ### Validação manual de `transform_ableton_midi_clip` no Live 12
 
-Status desta etapa: **PENDENTE DE VALIDAÇÃO MANUAL**. Os testes automatizados não
-substituem este procedimento no Ableton Live real.
+Status desta etapa: **VALIDADO MANUALMENTE EM LIVE 12.4.5** em 27 de agosto de
+2026. O procedimento abaixo permanece como roteiro reproduzível.
 
 1. Ative o ambiente, reinstale o Remote Script atualizado e confirme a conexão:
 
@@ -442,9 +442,19 @@ substituem este procedimento no Ableton Live real.
    timing/velocity, source intacto, nenhuma nota fora do clip e conteúdo de notas
    idêntico nos dois targets produzidos com seed `42`.
 
-Registre a versão do Live, os índices usados e o resultado de cada conferência.
-Somente depois desse procedimento o fluxo de transformação pode ser marcado como
-validado manualmente.
+Validação executada no Windows com o Remote Script reinstalado e o Live
+reiniciado. Os sources `0/0` e `1/0` foram preservados. `transpose` em `0/6`
+alterou os pitches de `75, 74, 63, 65, 74` para `87, 86, 75, 77, 86` e manteve
+timings, durações, velocities e mute. `quantize` em `0/7` moveu o primeiro início
+de `0.129999948` para `0.25` beat e alinhou todos os inícios à grade `1/16`.
+`humanize` em `1/7`, com seed `42`, reproduziu exatamente as notas e o fingerprint
+`aacd6b198d61c8f561463d4e1699fd6f8927217ac70a4f6109533be9fc56ef64` de outra
+execução com a mesma seed. Todos os targets permaneceram dentro dos limites dos
+clips e foram conferidos no piano roll.
+
+A proteção da duplicação também foi validada na instância atualizada do bridge:
+um `expected_source_fingerprint` inválido retornou `CLIP_CHANGED`, e uma leitura
+imediata confirmou que o target continuava vazio.
 
 As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonClient`. A nova tool de alto nível orquestra o fluxo, mas os algoritmos musicais ficam exclusivamente em `transformations/`. Não existe interpretação de linguagem natural, aleatoriedade global ou lógica musical no Ableton bridge.
 
