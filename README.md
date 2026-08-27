@@ -424,10 +424,8 @@ Todos os parâmetros e o snapshot source são validados, e a transformação com
 ### Validação manual de `transform_ableton_midi_clip` no Live 12
 
 O roteiro e as evidências desta seção cobrem `transpose`, `invert`, `retrograde`,
-`quantize` e `humanize`, incluindo conferência dos conteúdos pela ponte e no
-piano roll do Live. `legato` foi adicionado depois, tem cobertura automática do
-domínio ao MCP e reutiliza o mesmo fluxo de cópia validado, mas ainda não recebeu
-uma conferência visual específica no Live.
+`quantize`, `humanize` e `legato`, incluindo conferência dos conteúdos pela
+ponte e no piano roll do Live.
 
 Status desta etapa: **VALIDADO MANUALMENTE EM LIVE 12.4.5** em 27 de agosto de
 2026. O procedimento abaixo permanece como roteiro reproduzível.
@@ -532,6 +530,19 @@ fingerprint
 As respostas estruturadas da tool MCP, as leituras posteriores da ponte e a
 comparação no piano roll coincidiram. Uma leitura final confirmou que o source
 continuou com as cinco notas e o fingerprint original.
+
+`legato` também foi **VALIDADO MANUALMENTE** na mesma instalação. A tool MCP
+transformou o source `1/0`, de oito beats, no target vazio `1/1`. As durações
+`1.5, 0.5, 1.5, 0.5, 2.0` passaram a
+`1.370833333, 1.5, 2.5, 0.5, 2.0` após a conversão determinística para ticks:
+as sobreposições foram encurtadas, as pausas foram fechadas no próximo onset e
+a nota final permaneceu até o fim do clip. Pitch, velocity e mute foram
+preservados. O source manteve o fingerprint
+`b7d38d63cf815b1e0df2f299f8d118edaa9d14648dd77be6d7aa1ce64af871a2`,
+enquanto o target produziu
+`fe127ee43f2549900082e81aa68c7bb17833726f3db5e2e51301cfe11730b6bb`.
+A resposta estruturada da tool MCP, a leitura posterior da ponte e a conferência
+visual no piano roll coincidiram; o projeto de validação foi salvo no Live.
 
 A proteção da duplicação também foi validada na instância atualizada do bridge:
 um `expected_source_fingerprint` inválido retornou `CLIP_CHANGED`, e uma leitura
