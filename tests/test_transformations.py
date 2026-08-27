@@ -2,6 +2,7 @@ from midi_generator.domain import NoteEvent
 from midi_generator.transformations import (
     EditableMidiClip,
     humanize,
+    invert,
     quantize,
     retrograde,
     transpose,
@@ -36,6 +37,39 @@ def test_transpose_rejects_entire_operation_if_any_pitch_is_invalid():
         raise AssertionError("invalid transposition was accepted")
 
     assert [note.pitch for note in clip.notes] == [60, 120]
+
+
+def test_invert_reflects_pitches_around_axis_and_preserves_other_properties():
+    original = (
+        NoteEvent(60, 120, 240, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 480, 120, 82),
+        NoteEvent(67, 720, 360, 73),
+    )
+    clip = make_clip(*original)
+
+    result = invert(clip, axis_pitch=64)
+
+    assert result.notes == (
+        NoteEvent(68, 120, 240, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 480, 120, 82),
+        NoteEvent(61, 720, 360, 73),
+    )
+    assert clip.notes == original
+    assert invert(result, axis_pitch=64) == clip
+
+
+def test_invert_rejects_invalid_axis_and_out_of_range_result_atomically():
+    clip = make_clip(NoteEvent(10, 0, 120, 90), NoteEvent(60, 120, 120, 80))
+
+    for axis_pitch, message in [(True, "axis_pitch"), (0, "outside 0..127")]:
+        try:
+            invert(clip, axis_pitch)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("invalid inversion was accepted")
+
+    assert [note.pitch for note in clip.notes] == [10, 60]
 
 
 def test_retrograde_reflects_note_boundaries_and_preserves_note_properties():

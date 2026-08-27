@@ -100,6 +100,19 @@ def test_retrograde_is_preflighted_and_applied_only_to_copy():
     assert result["transform"] == "retrograde"
 
 
+def test_invert_is_preflighted_and_applied_only_to_copy():
+    client = RecordingClient()
+
+    result = transform_midi_clip_copy(
+        client, 0, 0, 0, 1, "invert", axis_pitch=64
+    )
+
+    assert [call[0] for call in client.calls] == ["get", "duplicate", "get", "replace"]
+    assert client.calls[-1][4][0]["pitch"] == 68
+    assert client.source["notes"][0]["pitch"] == 60
+    assert result["transform"] == "invert"
+
+
 def test_target_must_be_empty_and_bridge_error_is_propagated():
     error = AbletonCommandError("TARGET_CLIP_SLOT_NOT_EMPTY", "occupied")
     client = RecordingClient(duplicate_error=error)
@@ -120,11 +133,31 @@ def test_invalid_transpose_fails_before_duplicate():
     assert client.calls == [("get", 0, 0)]
 
 
+def test_invalid_inversion_fails_before_duplicate():
+    client = RecordingClient(source=snapshot(0, 0, "source", pitch=127))
+
+    with pytest.raises(ValueError, match="outside 0..127"):
+        transform_midi_clip_copy(
+            client, 0, 0, 0, 1, "invert", axis_pitch=60
+        )
+
+    assert client.calls == [("get", 0, 0)]
+
+
 def test_invalid_parameters_fail_even_before_reading_source():
     client = RecordingClient()
 
     with pytest.raises(ValueError, match="quantize requires grid"):
         transform_midi_clip_copy(client, 0, 0, 0, 1, "quantize")
+
+    assert client.calls == []
+
+
+def test_missing_inversion_axis_fails_before_reading_source():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="invert requires axis_pitch"):
+        transform_midi_clip_copy(client, 0, 0, 0, 1, "invert")
 
     assert client.calls == []
 

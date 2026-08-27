@@ -221,6 +221,31 @@ def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch)
     assert result["transform"] == "retrograde"
 
 
+def test_transform_tool_exposes_melodic_inversion(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "transform_ableton_midi_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "transform": "invert",
+                    "axis_pitch": 64,
+                },
+            )
+
+    result = asyncio.run(call_tool())
+
+    assert fake.replaced[3][0]["pitch"] == 68
+    assert result.is_error is False
+    assert result.structured_content["transform"] == "invert"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

@@ -8,9 +8,15 @@ from midi_generator.integration import (
     beats_to_ticks,
     clip_notes_to_ableton,
 )
-from midi_generator.transformations import humanize, quantize, retrograde, transpose
+from midi_generator.transformations import (
+    humanize,
+    invert,
+    quantize,
+    retrograde,
+    transpose,
+)
 
-TRANSFORMS = {"transpose", "retrograde", "quantize", "humanize"}
+TRANSFORMS = {"transpose", "invert", "retrograde", "quantize", "humanize"}
 
 
 class TransformedClipResult(TypedDict):
@@ -38,6 +44,7 @@ def transform_midi_clip_copy(
     seed: int | None = None,
     max_timing_shift: float | None = None,
     max_velocity_delta: int | None = None,
+    axis_pitch: int | None = None,
 ) -> TransformedClipResult:
     """Read, preflight, duplicate, transform and replace only the copied clip."""
     _validate_indices(
@@ -47,7 +54,13 @@ def transform_midi_clip_copy(
         target_scene_index,
     )
     parameters = _validate_parameters(
-        transform, semitones, grid, seed, max_timing_shift, max_velocity_delta
+        transform,
+        semitones,
+        grid,
+        seed,
+        max_timing_shift,
+        max_velocity_delta,
+        axis_pitch,
     )
 
     source_snapshot = client.get_midi_clip(source_track_index, source_scene_index)
@@ -88,6 +101,8 @@ def transform_midi_clip_copy(
 def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
     if transform == "transpose":
         return transpose(clip, parameters["semitones"])
+    if transform == "invert":
+        return invert(clip, parameters["axis_pitch"])
     if transform == "retrograde":
         return retrograde(clip)
     if transform == "quantize":
@@ -107,15 +122,21 @@ def _validate_parameters(
     seed: int | None,
     max_timing_shift: float | None,
     max_velocity_delta: int | None,
+    axis_pitch: int | None,
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
         raise ValueError(
-            "transform must be 'transpose', 'retrograde', 'quantize', or 'humanize'."
+            "transform must be 'transpose', 'invert', 'retrograde', 'quantize', "
+            "or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
             raise ValueError("transpose requires semitones.")
         return {"semitones": semitones}
+    if transform == "invert":
+        if axis_pitch is None:
+            raise ValueError("invert requires axis_pitch.")
+        return {"axis_pitch": axis_pitch}
     if transform == "retrograde":
         return {}
     if transform == "quantize":

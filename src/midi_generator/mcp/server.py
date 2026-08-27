@@ -21,7 +21,7 @@ from midi_generator.mcp.ableton_transform import (
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.2.0",
+    version="1.3.0",
 )
 
 
@@ -122,6 +122,7 @@ def transform_ableton_midi_clip(
     seed: int | None = None,
     max_timing_shift: float | None = None,
     max_velocity_delta: int | None = None,
+    axis_pitch: int | None = None,
 ) -> TransformedClipResult:
     """Apply a deterministic transform to a duplicate in an empty clip slot."""
     try:
@@ -137,6 +138,7 @@ def transform_ableton_midi_clip(
             seed,
             max_timing_shift,
             max_velocity_delta,
+            axis_pitch,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

@@ -25,6 +25,23 @@ def transpose(clip: EditableMidiClip, semitones: int) -> EditableMidiClip:
     )
 
 
+def invert(clip: EditableMidiClip, axis_pitch: int) -> EditableMidiClip:
+    """Reflect every pitch around an integer MIDI note axis."""
+    clip.validate()
+    if not _is_int(axis_pitch) or not 0 <= axis_pitch <= 127:
+        raise ValueError("axis_pitch must be an integer between 0 and 127.")
+    pitches = [2 * axis_pitch - note.pitch for note in clip.notes]
+    if any(pitch < 0 or pitch > 127 for pitch in pitches):
+        raise ValueError("Inversion would produce a pitch outside 0..127.")
+    return replace(
+        clip,
+        notes=tuple(
+            replace(note, pitch=pitch)
+            for note, pitch in zip(clip.notes, pitches, strict=True)
+        ),
+    )
+
+
 def retrograde(clip: EditableMidiClip) -> EditableMidiClip:
     """Reflect every note in time around the clip boundaries."""
     clip.validate()
