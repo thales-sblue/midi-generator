@@ -89,6 +89,17 @@ def test_transform_flow_only_replaces_copy_and_uses_copy_fingerprint():
     assert result["target_clip_fingerprint"] == "transformed"
 
 
+def test_retrograde_is_preflighted_and_applied_only_to_copy():
+    client = RecordingClient()
+
+    result = transform_midi_clip_copy(client, 0, 0, 0, 1, "retrograde")
+
+    assert [call[0] for call in client.calls] == ["get", "duplicate", "get", "replace"]
+    assert client.calls[-1][4][0]["start_time"] == 3.0
+    assert client.source["notes"][0]["start_time"] == 0.5
+    assert result["transform"] == "retrograde"
+
+
 def test_target_must_be_empty_and_bridge_error_is_propagated():
     error = AbletonCommandError("TARGET_CLIP_SLOT_NOT_EMPTY", "occupied")
     client = RecordingClient(duplicate_error=error)

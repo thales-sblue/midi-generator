@@ -211,6 +211,16 @@ def test_transform_tool_returns_structured_result_and_only_edits_copy(monkeypatc
     assert result["target_clip_fingerprint"] == "result"
 
 
+def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(0, 0, 0, 1, "retrograde")
+
+    assert fake.replaced[3][0]["start_time"] == 3.0
+    assert result["transform"] == "retrograde"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

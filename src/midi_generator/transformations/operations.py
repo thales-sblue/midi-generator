@@ -25,6 +25,18 @@ def transpose(clip: EditableMidiClip, semitones: int) -> EditableMidiClip:
     )
 
 
+def retrograde(clip: EditableMidiClip) -> EditableMidiClip:
+    """Reflect every note in time around the clip boundaries."""
+    clip.validate()
+    return replace(
+        clip,
+        notes=tuple(
+            replace(note, start=clip.length_ticks - note.start - note.duration)
+            for note in clip.notes
+        ),
+    )
+
+
 def quantize(clip: EditableMidiClip, grid: str) -> EditableMidiClip:
     """Quantize starts to the nearest grid; keep duration unless the clip truncates it."""
     clip.validate()

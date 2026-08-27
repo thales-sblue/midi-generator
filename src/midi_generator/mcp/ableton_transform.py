@@ -8,9 +8,9 @@ from midi_generator.integration import (
     beats_to_ticks,
     clip_notes_to_ableton,
 )
-from midi_generator.transformations import humanize, quantize, transpose
+from midi_generator.transformations import humanize, quantize, retrograde, transpose
 
-TRANSFORMS = {"transpose", "quantize", "humanize"}
+TRANSFORMS = {"transpose", "retrograde", "quantize", "humanize"}
 
 
 class TransformedClipResult(TypedDict):
@@ -88,6 +88,8 @@ def transform_midi_clip_copy(
 def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
     if transform == "transpose":
         return transpose(clip, parameters["semitones"])
+    if transform == "retrograde":
+        return retrograde(clip)
     if transform == "quantize":
         return quantize(clip, parameters["grid"])
     return humanize(
@@ -107,11 +109,15 @@ def _validate_parameters(
     max_velocity_delta: int | None,
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
-        raise ValueError("transform must be 'transpose', 'quantize', or 'humanize'.")
+        raise ValueError(
+            "transform must be 'transpose', 'retrograde', 'quantize', or 'humanize'."
+        )
     if transform == "transpose":
         if semitones is None:
             raise ValueError("transpose requires semitones.")
         return {"semitones": semitones}
+    if transform == "retrograde":
+        return {}
     if transform == "quantize":
         if grid is None:
             raise ValueError("quantize requires grid.")

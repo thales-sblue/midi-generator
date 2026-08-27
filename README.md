@@ -331,6 +331,24 @@ Transpose em uma oitava:
 
 `transpose` preserva timing, duração, velocity e mute. Se qualquer pitch resultante ficar fora de `0..127`, toda a operação falha no dry-run, antes da duplicação.
 
+Retrograde temporal:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "retrograde"
+}
+```
+
+`retrograde` espelha cada nota entre as bordas do clip: o novo início é o
+comprimento do clip menos o fim original da nota. Assim, as durações são
+preservadas e as pausas são invertidas no tempo, enquanto pitch, velocity, mute,
+canal e track permanecem inalterados. A transformação não recebe parâmetros e
+aplicá-la duas vezes recupera exatamente o clip original.
+
 Quantize para semicolcheias:
 
 ```json
@@ -366,6 +384,11 @@ Na API MCP, `max_timing_shift` é expresso em beats e convertido deterministicam
 Todos os parâmetros e o snapshot source são validados, e a transformação completa é simulada, antes de criar a cópia. O target vazio ainda é garantido atomicamente pela primitiva `duplicate_midi_clip` no bridge. Existe um limite de atomicidade inevitável entre comandos: se a duplicação funcionar e uma falha externa ocorrer depois (por exemplo, o usuário alterar a cópia e causar `CLIP_CHANGED`, o Live fechar ou a conexão cair), a cópia não transformada pode permanecer no target. Não há rollback ou deleção implícita; o source continua intacto e a ocorrência deve ser resolvida explicitamente pelo usuário no Live.
 
 ### Validação manual de `transform_ableton_midi_clip` no Live 12
+
+O roteiro e as evidências desta seção cobrem `transpose`, `quantize` e
+`humanize`. `retrograde` foi adicionado depois, tem cobertura automática do
+domínio ao MCP e reutiliza o mesmo fluxo de cópia já validado, mas não recebeu
+uma conferência visual específica no Live.
 
 Status desta etapa: **VALIDADO MANUALMENTE EM LIVE 12.4.5** em 27 de agosto de
 2026. O procedimento abaixo permanece como roteiro reproduzível.
@@ -460,7 +483,7 @@ As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonCli
 
 **VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das tools MCP de baixo nível.
 
-A suíte também cobre transpose positivo e negativo, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
+A suíte também cobre transpose positivo e negativo, reflexão temporal e involução exata do retrograde, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
 
 As transformações desta versão operam somente sobre MIDI clips da Session View. Não criam tracks, instrumentos ou devices e não controlam transporte, Arrangement View, automações, mixagem ou áudio.
 

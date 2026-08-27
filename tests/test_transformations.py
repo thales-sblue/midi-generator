@@ -1,5 +1,11 @@
 from midi_generator.domain import NoteEvent
-from midi_generator.transformations import EditableMidiClip, humanize, quantize, transpose
+from midi_generator.transformations import (
+    EditableMidiClip,
+    humanize,
+    quantize,
+    retrograde,
+    transpose,
+)
 
 
 def make_clip(*notes, length_ticks=1920):
@@ -30,6 +36,35 @@ def test_transpose_rejects_entire_operation_if_any_pitch_is_invalid():
         raise AssertionError("invalid transposition was accepted")
 
     assert [note.pitch for note in clip.notes] == [60, 120]
+
+
+def test_retrograde_reflects_note_boundaries_and_preserves_note_properties():
+    original = (
+        NoteEvent(60, 0, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 360, 240, 82),
+        NoteEvent(67, 1680, 240, 73),
+    )
+    clip = make_clip(*original)
+
+    result = retrograde(clip)
+
+    assert result.notes == (
+        NoteEvent(60, 1800, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 1320, 240, 82),
+        NoteEvent(67, 0, 240, 73),
+    )
+    assert clip.notes == original
+    assert result is not clip
+
+
+def test_retrograde_is_an_exact_involution_for_valid_clips():
+    clip = make_clip(
+        NoteEvent(60, 120, 180, 90),
+        NoteEvent(64, 120, 360, 80),
+        length_ticks=1000,
+    )
+
+    assert retrograde(retrograde(clip)) == clip
 
 
 def test_quantize_supports_quarter_eighth_and_sixteenth_grids():

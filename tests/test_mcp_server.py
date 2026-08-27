@@ -226,6 +226,7 @@ def test_remote_script_contains_no_transformation_algorithms():
     source = "\n".join(path.read_text(encoding="utf-8") for path in root.glob("*.py"))
 
     assert "transpose" not in source
+    assert "retrograde" not in source
     assert "quantize" not in source
     assert "humanize" not in source
     assert "random" not in source
