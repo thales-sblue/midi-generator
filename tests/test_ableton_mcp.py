@@ -246,6 +246,16 @@ def test_transform_tool_exposes_melodic_inversion(monkeypatch):
     assert result.structured_content["transform"] == "invert"
 
 
+def test_transform_tool_exposes_legato_without_extra_parameters(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(0, 0, 0, 1, "legato")
+
+    assert fake.replaced[3][0]["duration"] == 3.5
+    assert result["transform"] == "legato"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

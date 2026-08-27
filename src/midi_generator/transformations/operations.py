@@ -54,6 +54,23 @@ def retrograde(clip: EditableMidiClip) -> EditableMidiClip:
     )
 
 
+def legato(clip: EditableMidiClip) -> EditableMidiClip:
+    """Set each note end to the next distinct onset or the clip boundary."""
+    clip.validate()
+    starts = sorted({note.start for note in clip.notes})
+    next_start = {
+        start: starts[index + 1] if index + 1 < len(starts) else clip.length_ticks
+        for index, start in enumerate(starts)
+    }
+    return replace(
+        clip,
+        notes=tuple(
+            replace(note, duration=next_start[note.start] - note.start)
+            for note in clip.notes
+        ),
+    )
+
+
 def quantize(clip: EditableMidiClip, grid: str) -> EditableMidiClip:
     """Quantize starts to the nearest grid; keep duration unless the clip truncates it."""
     clip.validate()

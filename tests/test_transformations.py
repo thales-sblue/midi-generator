@@ -3,6 +3,7 @@ from midi_generator.transformations import (
     EditableMidiClip,
     humanize,
     invert,
+    legato,
     quantize,
     retrograde,
     transpose,
@@ -99,6 +100,36 @@ def test_retrograde_is_an_exact_involution_for_valid_clips():
     )
 
     assert retrograde(retrograde(clip)) == clip
+
+
+def test_legato_groups_chords_and_closes_gaps_and_overlaps_by_onset():
+    original = (
+        NoteEvent(67, 720, 120, 73),
+        NoteEvent(60, 0, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 0, 600, 82),
+        NoteEvent(65, 480, 600, 77),
+    )
+    clip = make_clip(*original)
+
+    result = legato(clip)
+
+    assert result.notes == (
+        NoteEvent(67, 720, 1200, 73),
+        NoteEvent(60, 0, 480, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 0, 480, 82),
+        NoteEvent(65, 480, 240, 77),
+    )
+    assert clip.notes == original
+    assert legato(result) == result
+
+
+def test_legato_accepts_an_empty_clip_without_changing_its_length():
+    clip = make_clip(length_ticks=960)
+
+    result = legato(clip)
+
+    assert result == clip
+    assert result is not clip
 
 
 def test_quantize_supports_quarter_eighth_and_sixteenth_grids():

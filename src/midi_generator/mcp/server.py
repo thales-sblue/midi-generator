@@ -21,7 +21,7 @@ from midi_generator.mcp.ableton_transform import (
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.3.0",
+    version="1.4.0",
 )
 
 

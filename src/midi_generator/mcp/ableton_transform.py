@@ -11,12 +11,20 @@ from midi_generator.integration import (
 from midi_generator.transformations import (
     humanize,
     invert,
+    legato,
     quantize,
     retrograde,
     transpose,
 )
 
-TRANSFORMS = {"transpose", "invert", "retrograde", "quantize", "humanize"}
+TRANSFORMS = {
+    "transpose",
+    "invert",
+    "retrograde",
+    "legato",
+    "quantize",
+    "humanize",
+}
 
 
 class TransformedClipResult(TypedDict):
@@ -105,6 +113,8 @@ def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
         return invert(clip, parameters["axis_pitch"])
     if transform == "retrograde":
         return retrograde(clip)
+    if transform == "legato":
+        return legato(clip)
     if transform == "quantize":
         return quantize(clip, parameters["grid"])
     return humanize(
@@ -126,8 +136,8 @@ def _validate_parameters(
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
         raise ValueError(
-            "transform must be 'transpose', 'invert', 'retrograde', 'quantize', "
-            "or 'humanize'."
+            "transform must be 'transpose', 'invert', 'retrograde', 'legato', "
+            "'quantize', or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
@@ -138,6 +148,8 @@ def _validate_parameters(
             raise ValueError("invert requires axis_pitch.")
         return {"axis_pitch": axis_pitch}
     if transform == "retrograde":
+        return {}
+    if transform == "legato":
         return {}
     if transform == "quantize":
         if grid is None:

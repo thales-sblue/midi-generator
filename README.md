@@ -384,6 +384,24 @@ Quantize para semicolcheias:
 
 `quantize` aceita `1/4`, `1/8` e `1/16` em 4/4. O início é arredondado para a grade mais próxima em ticks inteiros; empates avançam para a próxima linha da grade. A duração original é preservada, exceto quando o novo início faria a nota ultrapassar o fim do clip: nesse caso ela é truncada até a borda. Se a grade arredondasse o início para o próprio fim do clip, usa-se a última linha válida anterior. Nenhuma nota começa antes de zero ou termina depois do clip.
 
+Articulação legato:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "legato"
+}
+```
+
+`legato` ajusta o fim de cada nota ao próximo início distinto. Notas de um
+acorde que começam juntas recebem a mesma duração; pausas entre onsets são
+fechadas, sobreposições são encurtadas e as notas do último onset alcançam o fim
+do clip. Pitch, velocity, mute, canal e track são preservados. A transformação
+não recebe parâmetros e reaplicá-la não altera novamente o resultado.
+
 Humanize determinístico:
 
 ```json
@@ -407,7 +425,9 @@ Todos os parâmetros e o snapshot source são validados, e a transformação com
 
 O roteiro e as evidências desta seção cobrem `transpose`, `invert`, `retrograde`,
 `quantize` e `humanize`, incluindo conferência dos conteúdos pela ponte e no
-piano roll do Live.
+piano roll do Live. `legato` foi adicionado depois, tem cobertura automática do
+domínio ao MCP e reutiliza o mesmo fluxo de cópia validado, mas ainda não recebeu
+uma conferência visual específica no Live.
 
 Status desta etapa: **VALIDADO MANUALMENTE EM LIVE 12.4.5** em 27 de agosto de
 2026. O procedimento abaixo permanece como roteiro reproduzível.
@@ -521,7 +541,7 @@ As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonCli
 
 **VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das tools MCP de baixo nível.
 
-A suíte também cobre transpose positivo e negativo, inversão melódica por eixo, reflexão temporal e involução exata de invert e retrograde, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
+A suíte também cobre transpose positivo e negativo, inversão melódica por eixo, reflexão temporal e involução exata de invert e retrograde, articulação legato por grupos de onset, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
 
 As transformações desta versão operam somente sobre MIDI clips da Session View. Não criam tracks, instrumentos ou devices e não controlam transporte, Arrangement View, automações, mixagem ou áudio.
 
