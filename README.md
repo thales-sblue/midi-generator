@@ -248,9 +248,11 @@ edit copy
 DOMAIN TRANSFORMATION
 READ source clip
    ↓
-validate + dry-run no domínio
+fingerprint A + validate + dry-run no domínio
    ↓
-safe duplicate para slot vazio
+duplicate protegido com expected_source_fingerprint=A
+   ↓
+bridge relê e compara o source imediatamente antes da criação
    ↓
 READ copy + DOMAIN TRANSFORMATION
    ↓
@@ -290,6 +292,25 @@ Exemplo de duplicação não destrutiva:
   "target_scene_index": 1
 }
 ```
+
+Para vincular a duplicação ao estado previamente lido do source, inclua o
+fingerprint retornado por `get_ableton_midi_clip`:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "expected_source_fingerprint": "<fingerprint do source>"
+}
+```
+
+Esse campo permanece opcional na primitiva de baixo nível por compatibilidade.
+Quando informado, o bridge obtém o snapshot atual e compara o fingerprint dentro
+do mesmo comando, antes de `create_clip()`. Se o source mudou, retorna
+`CLIP_CHANGED` e deixa o target vazio. A tool de alto nível
+`transform_ableton_midi_clip` sempre usa essa proteção.
 
 ### Transformações determinísticas v1
 
@@ -343,6 +364,87 @@ Humanize determinístico:
 Na API MCP, `max_timing_shift` é expresso em beats e convertido deterministicamente para o tick mais próximo. `humanize` exige `seed` e usa exclusivamente `random.Random(seed)`. O deslocamento de timing e a variação de velocity são sorteados dentro dos limites informados; pitch, duração e mute são preservados, velocity é limitada a `1..127`, e o timing é limitado às bordas do clip.
 
 Todos os parâmetros e o snapshot source são validados, e a transformação completa é simulada, antes de criar a cópia. O target vazio ainda é garantido atomicamente pela primitiva `duplicate_midi_clip` no bridge. Existe um limite de atomicidade inevitável entre comandos: se a duplicação funcionar e uma falha externa ocorrer depois (por exemplo, o usuário alterar a cópia e causar `CLIP_CHANGED`, o Live fechar ou a conexão cair), a cópia não transformada pode permanecer no target. Não há rollback ou deleção implícita; o source continua intacto e a ocorrência deve ser resolvida explicitamente pelo usuário no Live.
+
+### Validação manual de `transform_ableton_midi_clip` no Live 12
+
+Status desta etapa: **PENDENTE DE VALIDAÇÃO MANUAL**. Os testes automatizados não
+substituem este procedimento no Ableton Live real.
+
+1. Ative o ambiente, reinstale o Remote Script atualizado e confirme a conexão:
+
+   ```powershell
+   . .\.venv\Scripts\Activate.ps1
+   $env:PYTHONPATH = "src"
+   python -m midi_generator.ableton install-script
+   ```
+
+   Feche e reabra o Live, selecione `MidiGeneratorBridge` em **Preferences >
+   Link, Tempo & MIDI > Control Surface** e execute:
+
+   ```powershell
+   python -m midi_generator.ableton doctor
+   python -m midi_generator.mcp
+   ```
+
+2. Na Session View, crie um source MIDI conhecido no track `0`, scene `0`, e
+   deixe vazios os targets usados abaixo. Execute a tool MCP
+   `transform_ableton_midi_clip` com este payload para transpose:
+
+   ```json
+   {
+     "source_track_index": 0,
+     "source_scene_index": 0,
+     "target_track_index": 0,
+     "target_scene_index": 1,
+     "transform": "transpose",
+     "semitones": 12
+   }
+   ```
+
+   Confirme no piano roll: source intacto; target criado; pitches exatamente
+   `+12`; timings, velocities e durações idênticos aos do source.
+
+3. Com o mesmo source e o target `0/2` vazio, execute quantize:
+
+   ```json
+   {
+     "source_track_index": 0,
+     "source_scene_index": 0,
+     "target_track_index": 0,
+     "target_scene_index": 2,
+     "transform": "quantize",
+     "grid": "1/16"
+   }
+   ```
+
+   Confirme visualmente que os inícios estão alinhados à grade de semicolcheias
+   e que o source permanece intacto.
+
+4. Prepare duas cópias idênticas do mesmo source em slots distintos, ou use o
+   mesmo source ainda intacto com dois targets vazios. Execute humanize para o
+   primeiro target:
+
+   ```json
+   {
+     "source_track_index": 0,
+     "source_scene_index": 0,
+     "target_track_index": 0,
+     "target_scene_index": 3,
+     "transform": "humanize",
+     "seed": 42,
+     "max_timing_shift": 0.05,
+     "max_velocity_delta": 5
+   }
+   ```
+
+   Repita com exatamente os mesmos parâmetros, alterando apenas
+   `target_scene_index` para outro slot vazio. Confirme pequenas mudanças de
+   timing/velocity, source intacto, nenhuma nota fora do clip e conteúdo de notas
+   idêntico nos dois targets produzidos com seed `42`.
+
+Registre a versão do Live, os índices usados e o resultado de cada conferência.
+Somente depois desse procedimento o fluxo de transformação pode ser marcado como
+validado manualmente.
 
 As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonClient`. A nova tool de alto nível orquestra o fluxo, mas os algoritmos musicais ficam exclusivamente em `transformations/`. Não existe interpretação de linguagem natural, aleatoriedade global ou lógica musical no Ableton bridge.
 

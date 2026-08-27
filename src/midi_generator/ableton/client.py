@@ -81,15 +81,19 @@ class AbletonClient:
         source_scene_index: int,
         target_track_index: int,
         target_scene_index: int,
+        expected_source_fingerprint: str | None = None,
     ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "source_track_index": source_track_index,
+            "source_scene_index": source_scene_index,
+            "target_track_index": target_track_index,
+            "target_scene_index": target_scene_index,
+        }
+        if expected_source_fingerprint is not None:
+            params["expected_source_fingerprint"] = expected_source_fingerprint
         return self._call(
             "duplicate_midi_clip",
-            {
-                "source_track_index": source_track_index,
-                "source_scene_index": source_scene_index,
-                "target_track_index": target_track_index,
-                "target_scene_index": target_scene_index,
-            },
+            params,
         )
 
     def _call(self, command: str, params: dict[str, Any]) -> dict[str, Any]:

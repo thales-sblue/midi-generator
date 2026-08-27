@@ -54,8 +54,21 @@ class FakeAbletonClient:
         self.replaced = (track_index, scene_index, expected_fingerprint, notes)
         return {"replaced": True, "clip_fingerprint": "def"}
 
-    def duplicate_midi_clip(self, source_track_index, source_scene_index, target_track_index, target_scene_index):
-        self.duplicated = (source_track_index, source_scene_index, target_track_index, target_scene_index)
+    def duplicate_midi_clip(
+        self,
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        expected_source_fingerprint=None,
+    ):
+        self.duplicated = (
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            expected_source_fingerprint,
+        )
         return {"duplicated": True, "clip_fingerprint": "abc"}
 
 
@@ -134,8 +147,20 @@ def test_clip_tools_only_delegate_to_ableton_client(monkeypatch):
     assert read["clip_fingerprint"] == "abc"
     assert fake.replaced == (0, 1, "abc", notes)
     assert replaced["replaced"] is True
-    assert fake.duplicated == (0, 1, 0, 2)
+    assert fake.duplicated == (0, 1, 0, 2, None)
     assert duplicated["duplicated"] is True
+
+
+def test_duplicate_tool_propagates_optional_source_fingerprint(monkeypatch):
+    fake = FakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = duplicate_ableton_midi_clip(
+        0, 0, 0, 1, expected_source_fingerprint="source-fingerprint"
+    )
+
+    assert result["duplicated"] is True
+    assert fake.duplicated == (0, 0, 0, 1, "source-fingerprint")
 
 
 def test_mcp_client_calls_read_clip_tool(monkeypatch):
@@ -179,7 +204,7 @@ def test_transform_tool_returns_structured_result_and_only_edits_copy(monkeypatc
     result = transform_ableton_midi_clip(0, 0, 0, 1, "transpose", semitones=12)
 
     assert fake.reads == [(0, 0), (0, 1)]
-    assert fake.duplicated == (0, 0, 0, 1)
+    assert fake.duplicated == (0, 0, 0, 1, "source")
     assert fake.replaced[:3] == (0, 1, "copy")
     assert fake.replaced[3][0]["pitch"] == 72
     assert result["source_clip_fingerprint"] == "source"

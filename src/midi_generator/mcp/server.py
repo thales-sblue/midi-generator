@@ -89,14 +89,22 @@ def duplicate_ableton_midi_clip(
     source_scene_index: int,
     target_track_index: int,
     target_scene_index: int,
+    expected_source_fingerprint: str | None = None,
 ) -> dict[str, Any]:
-    """Duplicate an Ableton MIDI clip into an empty Session View slot."""
+    """Duplicate an Ableton MIDI clip, optionally requiring its fingerprint."""
     try:
-        return AbletonClient().duplicate_midi_clip(
+        client = AbletonClient()
+        indices = (
             source_track_index,
             source_scene_index,
             target_track_index,
             target_scene_index,
+        )
+        if expected_source_fingerprint is None:
+            return client.duplicate_midi_clip(*indices)
+        return client.duplicate_midi_clip(
+            *indices,
+            expected_source_fingerprint=expected_source_fingerprint,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

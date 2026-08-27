@@ -64,8 +64,10 @@ class FakeClipSlot:
         self.has_clip = has_clip
         self.clip = FakeClip()
         self.created_length = None
+        self.create_calls = 0
 
     def create_clip(self, length):
+        self.create_calls += 1
         self.created_length = length
         self.has_clip = True
         self.clip = FakeClip(length=length)
@@ -335,6 +337,70 @@ def test_duplicate_midi_clip_copies_content_into_empty_slot():
     assert result["duplicated"] is True
     assert result["notes"][0]["pitch"] == 60
     assert context.song().tracks[0].clip_slots[1].clip.name == "Melody"
+
+
+def test_duplicate_midi_clip_accepts_matching_source_fingerprint():
+    context = round_trip_context([FakeNote(60, 0.0, 0.5, 90)])
+    dispatcher = BridgeDispatcher(context)
+    fingerprint = dispatcher.dispatch(
+        {
+            "request_id": "read",
+            "command": "get_midi_clip",
+            "params": {"track_index": 0, "scene_index": 0},
+        }
+    )["result"]["clip_fingerprint"]
+
+    result = dispatcher.dispatch(
+        {
+            "request_id": "copy",
+            "command": "duplicate_midi_clip",
+            "params": {
+                "source_track_index": 0,
+                "source_scene_index": 0,
+                "target_track_index": 0,
+                "target_scene_index": 1,
+                "expected_source_fingerprint": fingerprint,
+            },
+        }
+    )["result"]
+
+    assert result["duplicated"] is True
+    assert context.song().tracks[0].clip_slots[1].create_calls == 1
+
+
+def test_duplicate_midi_clip_rejects_changed_source_before_creating_target():
+    context = round_trip_context([FakeNote(60, 0.0, 0.5, 90)])
+    dispatcher = BridgeDispatcher(context)
+    fingerprint = dispatcher.dispatch(
+        {
+            "request_id": "read",
+            "command": "get_midi_clip",
+            "params": {"track_index": 0, "scene_index": 0},
+        }
+    )["result"]["clip_fingerprint"]
+    source = context.song().tracks[0].clip_slots[0].clip
+    source.notes[0].pitch = 61
+    target_slot = context.song().tracks[0].clip_slots[1]
+
+    with pytest.raises(BridgeCommandError) as caught:
+        dispatcher.dispatch(
+            {
+                "request_id": "stale-copy",
+                "command": "duplicate_midi_clip",
+                "params": {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "expected_source_fingerprint": fingerprint,
+                },
+            }
+        )
+
+    assert caught.value.code == "CLIP_CHANGED"
+    assert target_slot.has_clip is False
+    assert target_slot.create_calls == 0
+    assert source.notes[0].pitch == 61
 
 
 def test_duplicate_midi_clip_refuses_occupied_target():

@@ -34,8 +34,24 @@ class RecordingClient:
         self.calls.append(("get", track, scene))
         return self.source if (track, scene) == (0, 0) else self.copy
 
-    def duplicate_midi_clip(self, source_track, source_scene, target_track, target_scene):
-        self.calls.append(("duplicate", source_track, source_scene, target_track, target_scene))
+    def duplicate_midi_clip(
+        self,
+        source_track,
+        source_scene,
+        target_track,
+        target_scene,
+        expected_source_fingerprint=None,
+    ):
+        self.calls.append(
+            (
+                "duplicate",
+                source_track,
+                source_scene,
+                target_track,
+                target_scene,
+                expected_source_fingerprint,
+            )
+        )
         if self.duplicate_error:
             raise self.duplicate_error
         return {"duplicated": True}
@@ -58,6 +74,7 @@ def test_transform_flow_only_replaces_copy_and_uses_copy_fingerprint():
     result = transform_midi_clip_copy(client, 0, 0, 0, 1, "transpose", semitones=12)
 
     assert [call[0] for call in client.calls] == ["get", "duplicate", "get", "replace"]
+    assert client.calls[1] == ("duplicate", 0, 0, 0, 1, "source")
     replace = client.calls[-1]
     assert replace[1:4] == (0, 1, "copy")
     assert replace[4][0] == {
@@ -121,3 +138,52 @@ def test_clip_changed_from_copy_replace_is_propagated_and_source_untouched():
     assert caught.value.code == "CLIP_CHANGED"
     assert client.calls[-1][1:4] == (0, 1, "copy")
     assert not any(call[0] == "replace" and call[1:3] == (0, 0) for call in client.calls)
+
+
+class SourceChangingClient(RecordingClient):
+    def __init__(self):
+        super().__init__()
+        self.target_created = False
+
+    def duplicate_midi_clip(
+        self,
+        source_track,
+        source_scene,
+        target_track,
+        target_scene,
+        expected_source_fingerprint=None,
+    ):
+        self.calls.append(
+            (
+                "duplicate",
+                source_track,
+                source_scene,
+                target_track,
+                target_scene,
+                expected_source_fingerprint,
+            )
+        )
+        self.source = snapshot(0, 0, "source-B", pitch=61)
+        if expected_source_fingerprint != self.source["clip_fingerprint"]:
+            raise AbletonCommandError("CLIP_CHANGED", "source changed")
+        self.target_created = True
+        return {"duplicated": True}
+
+
+def test_source_change_between_read_and_protected_duplicate_stops_pipeline():
+    client = SourceChangingClient()
+
+    with pytest.raises(AbletonCommandError) as caught:
+        transform_midi_clip_copy(
+            client, 0, 0, 0, 1, "transpose", semitones=12
+        )
+
+    assert caught.value.code == "CLIP_CHANGED"
+    assert client.calls == [
+        ("get", 0, 0),
+        ("duplicate", 0, 0, 0, 1, "source"),
+    ]
+    assert client.source["clip_fingerprint"] == "source-B"
+    assert client.source["notes"][0]["pitch"] == 61
+    assert client.target_created is False
+    assert not any(call[0] == "replace" for call in client.calls)

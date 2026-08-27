@@ -188,6 +188,31 @@ def test_clip_client_methods_send_exact_commands(invoke, command, params):
     assert captured[0]["params"] == params
 
 
+def test_protected_duplicate_sends_expected_source_fingerprint_exactly():
+    captured = []
+
+    def respond(request):
+        captured.append(request)
+        return {
+            "request_id": request["request_id"],
+            "ok": True,
+            "result": {"duplicated": True},
+        }
+
+    with fake_bridge(respond) as port:
+        AbletonClient(port=port).duplicate_midi_clip(
+            0, 0, 0, 1, expected_source_fingerprint="source-fingerprint"
+        )
+
+    assert captured[0]["params"] == {
+        "source_track_index": 0,
+        "source_scene_index": 0,
+        "target_track_index": 0,
+        "target_scene_index": 1,
+        "expected_source_fingerprint": "source-fingerprint",
+    }
+
+
 def test_clip_changed_error_code_is_propagated():
     def respond(request):
         return {"request_id": request["request_id"], "ok": False, "error": {"code": "CLIP_CHANGED", "message": "Read it again."}}
@@ -195,3 +220,21 @@ def test_clip_changed_error_code_is_propagated():
         with pytest.raises(AbletonCommandError) as caught:
             AbletonClient(port=port).replace_midi_clip_notes(0, 0, "old", [])
     assert caught.value.code == "CLIP_CHANGED"
+
+
+def test_protected_duplicate_propagates_clip_changed_error_code():
+    def respond(request):
+        return {
+            "request_id": request["request_id"],
+            "ok": False,
+            "error": {"code": "CLIP_CHANGED", "message": "Source changed."},
+        }
+
+    with fake_bridge(respond) as port:
+        with pytest.raises(AbletonCommandError) as caught:
+            AbletonClient(port=port).duplicate_midi_clip(
+                0, 0, 0, 1, expected_source_fingerprint="old"
+            )
+
+    assert caught.value.code == "CLIP_CHANGED"
+    assert caught.value.message == "Source changed."

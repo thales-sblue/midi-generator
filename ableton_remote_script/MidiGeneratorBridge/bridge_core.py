@@ -236,11 +236,23 @@ class BridgeDispatcher:
         target_track_index = _required_index(params, "target_track_index")
         target_scene_index = _required_index(params, "target_scene_index")
         source = self._require_midi_clip(source_track_index, source_scene_index)
-        target_slot = self._require_empty_midi_slot(
-            target_track_index, target_scene_index
-        )
         source_data = _clip_snapshot(
             source, source_track_index, source_scene_index
+        )
+        if "expected_source_fingerprint" in params:
+            expected = params["expected_source_fingerprint"]
+            if not isinstance(expected, str) or not expected:
+                raise BridgeCommandError(
+                    "INVALID_REQUEST",
+                    "expected_source_fingerprint must be a non-empty string.",
+                )
+            if expected != source_data["clip_fingerprint"]:
+                raise BridgeCommandError(
+                    "CLIP_CHANGED",
+                    "The source MIDI clip changed since it was read. Read it again before duplicating.",
+                )
+        target_slot = self._require_empty_midi_slot(
+            target_track_index, target_scene_index
         )
 
         target_slot.create_clip(source_data["clip_length_beats"])

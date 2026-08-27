@@ -60,6 +60,7 @@ def transform_midi_clip_copy(
         source_scene_index,
         target_track_index,
         target_scene_index,
+        expected_source_fingerprint=source_fingerprint,
     )
     copy_snapshot = client.get_midi_clip(target_track_index, target_scene_index)
     copy_clip = ableton_snapshot_to_clip(copy_snapshot)

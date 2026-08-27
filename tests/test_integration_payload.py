@@ -72,6 +72,19 @@ def test_payload_preserves_every_note_and_report_field():
     }
 
 
+def test_payload_v1_note_contract_does_not_include_mute():
+    plan = generate_plan(MelodyRequest(120, "C", "minor", 4, 42))
+
+    payload = composition_to_payload(plan)
+
+    assert payload["notes"]
+    assert all(
+        set(note) == {"pitch", "start", "duration", "velocity", "channel", "track"}
+        for note in payload["notes"]
+    )
+    assert all("mute" not in note for note in payload["notes"])
+
+
 def test_payload_is_json_safe_and_deterministic():
     request = MelodyRequest(110, "Bb", "minor", 4, 7)
 
