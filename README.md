@@ -405,10 +405,9 @@ Todos os parâmetros e o snapshot source são validados, e a transformação com
 
 ### Validação manual de `transform_ableton_midi_clip` no Live 12
 
-O roteiro e as evidências desta seção cobrem `transpose`, `quantize` e
-`humanize`. `invert` e `retrograde` foram adicionados depois, têm cobertura
-automática do domínio ao MCP e reutilizam o mesmo fluxo de cópia já validado,
-mas não receberam uma conferência visual específica no Live.
+O roteiro e as evidências desta seção cobrem `transpose`, `invert`, `retrograde`,
+`quantize` e `humanize`, incluindo conferência dos conteúdos pela ponte e no
+piano roll do Live.
 
 Status desta etapa: **VALIDADO MANUALMENTE EM LIVE 12.4.5** em 27 de agosto de
 2026. O procedimento abaixo permanece como roteiro reproduzível.
@@ -494,6 +493,25 @@ de `0.129999948` para `0.25` beat e alinhou todos os inícios à grade `1/16`.
 `aacd6b198d61c8f561463d4e1699fd6f8927217ac70a4f6109533be9fc56ef64` de outra
 execução com a mesma seed. Todos os targets permaneceram dentro dos limites dos
 clips e foram conferidos no piano roll.
+
+Na mesma instalação do Live 12.4.5, `invert` e `retrograde` também foram
+**VALIDADOS MANUALMENTE** em 27 de agosto de 2026. Duas cenas vazias foram
+adicionadas sem remover clips existentes. Com o source `0/0` de oito beats e
+fingerprint
+`409d2d298e626b75bd6086f89b9d173660dea13c01ce415e01308cd880b4ab73`,
+`invert` em `0/1`, usando `axis_pitch = 69`, alterou os pitches
+`75, 74, 63, 65, 74` para `63, 64, 75, 73, 64` e produziu o fingerprint
+`79c0d8dfe228fb0e7f703e7e0a9f5a54e681eaf3e65e25f612d624ac95fced23`.
+Timing, duração, velocity e mute permaneceram idênticos ao source.
+
+`retrograde` em `0/2` produziu, em ordem temporal, as notas
+`74@0.0+2.0`, `65@2.0+0.5`, `63@3.5+1.5`, `74@6.0+0.5` e
+`75@6.5+1.5`, exatamente o espelho temporal esperado dentro do clip, com
+fingerprint
+`53579797580d3ffa57060ac513feb1f2a3e66c64593baeadd7c5780ff1478ea0`.
+As respostas estruturadas da tool MCP, as leituras posteriores da ponte e a
+comparação no piano roll coincidiram. Uma leitura final confirmou que o source
+continuou com as cinco notas e o fingerprint original.
 
 A proteção da duplicação também foi validada na instância atualizada do bridge:
 um `expected_source_fingerprint` inválido retornou `CLIP_CHANGED`, e uma leitura
