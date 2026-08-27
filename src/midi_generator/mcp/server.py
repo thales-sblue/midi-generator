@@ -123,6 +123,7 @@ def transform_ableton_midi_clip(
     max_timing_shift: float | None = None,
     max_velocity_delta: int | None = None,
     axis_pitch: int | None = None,
+    max_duration: float | None = None,
 ) -> TransformedClipResult:
     """Apply a deterministic transform to a duplicate in an empty clip slot."""
     try:
@@ -139,6 +140,7 @@ def transform_ableton_midi_clip(
             max_timing_shift,
             max_velocity_delta,
             axis_pitch,
+            max_duration,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

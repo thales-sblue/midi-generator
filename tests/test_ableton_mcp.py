@@ -256,6 +256,18 @@ def test_transform_tool_exposes_legato_without_extra_parameters(monkeypatch):
     assert result["transform"] == "legato"
 
 
+def test_transform_tool_exposes_staccato_with_max_duration(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(
+        0, 0, 0, 1, "staccato", max_duration=0.25
+    )
+
+    assert fake.replaced[3][0]["duration"] == 0.25
+    assert result["transform"] == "staccato"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

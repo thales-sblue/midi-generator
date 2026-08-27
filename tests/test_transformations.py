@@ -6,6 +6,7 @@ from midi_generator.transformations import (
     legato,
     quantize,
     retrograde,
+    staccato,
     transpose,
 )
 
@@ -130,6 +131,35 @@ def test_legato_accepts_an_empty_clip_without_changing_its_length():
 
     assert result == clip
     assert result is not clip
+
+
+def test_staccato_caps_duration_and_preserves_onsets_and_note_properties():
+    original = (
+        NoteEvent(60, 0, 600, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 720, 90, 82),
+    )
+    clip = make_clip(*original)
+
+    result = staccato(clip, max_duration=120)
+
+    assert result.notes == (
+        NoteEvent(60, 0, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 720, 90, 82),
+    )
+    assert clip.notes == original
+    assert staccato(result, max_duration=120) == result
+
+
+def test_staccato_rejects_non_positive_or_non_integer_duration():
+    clip = make_clip(NoteEvent(60, 0, 240, 90))
+
+    for max_duration in (0, -1, True, 1.5):
+        try:
+            staccato(clip, max_duration)
+        except ValueError as error:
+            assert "positive integer" in str(error)
+        else:
+            raise AssertionError("invalid staccato duration was accepted")
 
 
 def test_quantize_supports_quarter_eighth_and_sixteenth_grids():

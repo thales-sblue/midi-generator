@@ -14,6 +14,7 @@ from midi_generator.transformations import (
     legato,
     quantize,
     retrograde,
+    staccato,
     transpose,
 )
 
@@ -22,6 +23,7 @@ TRANSFORMS = {
     "invert",
     "retrograde",
     "legato",
+    "staccato",
     "quantize",
     "humanize",
 }
@@ -53,6 +55,7 @@ def transform_midi_clip_copy(
     max_timing_shift: float | None = None,
     max_velocity_delta: int | None = None,
     axis_pitch: int | None = None,
+    max_duration: float | None = None,
 ) -> TransformedClipResult:
     """Read, preflight, duplicate, transform and replace only the copied clip."""
     _validate_indices(
@@ -69,6 +72,7 @@ def transform_midi_clip_copy(
         max_timing_shift,
         max_velocity_delta,
         axis_pitch,
+        max_duration,
     )
 
     source_snapshot = client.get_midi_clip(source_track_index, source_scene_index)
@@ -115,6 +119,8 @@ def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
         return retrograde(clip)
     if transform == "legato":
         return legato(clip)
+    if transform == "staccato":
+        return staccato(clip, parameters["max_duration_ticks"])
     if transform == "quantize":
         return quantize(clip, parameters["grid"])
     return humanize(
@@ -133,11 +139,12 @@ def _validate_parameters(
     max_timing_shift: float | None,
     max_velocity_delta: int | None,
     axis_pitch: int | None,
+    max_duration: float | None,
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
         raise ValueError(
             "transform must be 'transpose', 'invert', 'retrograde', 'legato', "
-            "'quantize', or 'humanize'."
+            "'staccato', 'quantize', or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
@@ -151,6 +158,13 @@ def _validate_parameters(
         return {}
     if transform == "legato":
         return {}
+    if transform == "staccato":
+        if max_duration is None:
+            raise ValueError("staccato requires max_duration.")
+        duration_ticks = beats_to_ticks(max_duration, "max_duration")
+        if duration_ticks <= 0:
+            raise ValueError("max_duration must convert to at least one tick.")
+        return {"max_duration_ticks": duration_ticks}
     if transform == "quantize":
         if grid is None:
             raise ValueError("quantize requires grid.")

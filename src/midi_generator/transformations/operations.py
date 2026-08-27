@@ -71,6 +71,20 @@ def legato(clip: EditableMidiClip) -> EditableMidiClip:
     )
 
 
+def staccato(clip: EditableMidiClip, max_duration: int) -> EditableMidiClip:
+    """Shorten notes to a maximum tick duration without changing their onsets."""
+    clip.validate()
+    if not _is_int(max_duration) or max_duration <= 0:
+        raise ValueError("max_duration must be a positive integer of ticks.")
+    return replace(
+        clip,
+        notes=tuple(
+            replace(note, duration=min(note.duration, max_duration))
+            for note in clip.notes
+        ),
+    )
+
+
 def quantize(clip: EditableMidiClip, grid: str) -> EditableMidiClip:
     """Quantize starts to the nearest grid; keep duration unless the clip truncates it."""
     clip.validate()

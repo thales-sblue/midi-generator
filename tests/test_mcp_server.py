@@ -229,6 +229,7 @@ def test_remote_script_contains_no_transformation_algorithms():
     assert "invert" not in source
     assert "retrograde" not in source
     assert "legato" not in source
+    assert "staccato" not in source
     assert "quantize" not in source
     assert "humanize" not in source
     assert "random" not in source

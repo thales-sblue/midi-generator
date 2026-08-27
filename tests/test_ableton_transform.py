@@ -124,6 +124,44 @@ def test_legato_is_preflighted_and_applied_only_to_copy():
     assert result["transform"] == "legato"
 
 
+def test_staccato_is_preflighted_and_applied_only_to_copy():
+    client = RecordingClient()
+
+    result = transform_midi_clip_copy(
+        client, 0, 0, 0, 1, "staccato", max_duration=0.25
+    )
+
+    assert [call[0] for call in client.calls] == [
+        "get",
+        "duplicate",
+        "get",
+        "replace",
+    ]
+    assert client.calls[-1][4][0]["duration"] == 0.25
+    assert client.source["notes"][0]["duration"] == 0.5
+    assert result["transform"] == "staccato"
+
+
+def test_missing_staccato_duration_fails_before_reading_source():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="staccato requires max_duration"):
+        transform_midi_clip_copy(client, 0, 0, 0, 1, "staccato")
+
+    assert client.calls == []
+
+
+def test_sub_tick_staccato_duration_fails_before_reading_source():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="at least one tick"):
+        transform_midi_clip_copy(
+            client, 0, 0, 0, 1, "staccato", max_duration=0.001
+        )
+
+    assert client.calls == []
+
+
 def test_target_must_be_empty_and_bridge_error_is_propagated():
     error = AbletonCommandError("TARGET_CLIP_SLOT_NOT_EMPTY", "occupied")
     client = RecordingClient(duplicate_error=error)
