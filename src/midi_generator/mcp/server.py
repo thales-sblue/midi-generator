@@ -1,17 +1,33 @@
 """MCP server exposing the existing deterministic composition engine."""
 
+from typing import Any, TypedDict
+
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from midi_generator.ableton import AbletonClient, AbletonError
 from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_plan
-from midi_generator.integration import IntegrationPayload, composition_to_payload
+from midi_generator.integration import (
+    IntegrationPayload,
+    composition_to_payload,
+    validate_payload_v1,
+)
 
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
     version="1.0.0",
 )
+
+
+class InsertedClipResult(TypedDict):
+    inserted: bool
+    track_index: int
+    scene_index: int
+    clip_length_beats: float
+    note_count: int
+    schema_version: int
 
 
 @mcp.tool()
@@ -23,6 +39,48 @@ def generate_melody(
     seed: int,
 ) -> IntegrationPayload:
     """Generate a deterministic melody and return Integration Payload v1."""
+    try:
+        return _generate_payload(bpm, root_note, scale, bars, seed)
+    except ValueError as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def get_ableton_session() -> dict[str, Any]:
+    """Get the minimal Ableton Session state needed to choose a clip slot."""
+    try:
+        return AbletonClient().get_session_state()
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def generate_and_insert_melody(
+    bpm: int,
+    root_note: str,
+    scale: str,
+    bars: int,
+    seed: int,
+    track_index: int,
+    scene_index: int,
+) -> InsertedClipResult:
+    """Generate a melody and insert it into an empty Ableton Session clip slot."""
+    try:
+        payload = _generate_payload(bpm, root_note, scale, bars, seed)
+        validate_payload_v1(payload)
+        result = AbletonClient().create_midi_clip(track_index, scene_index, payload)
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+    return InsertedClipResult(**result)
+
+
+def _generate_payload(
+    bpm: int,
+    root_note: str,
+    scale: str,
+    bars: int,
+    seed: int,
+) -> IntegrationPayload:
     request = MelodyRequest(
         bpm=bpm,
         root_note=root_note,
@@ -30,10 +88,7 @@ def generate_melody(
         bars=bars,
         seed=seed,
     )
-    try:
-        plan = generate_plan(request)
-    except ValueError as error:
-        raise ToolError(str(error)) from error
+    plan = generate_plan(request)
     return composition_to_payload(plan)
 
 

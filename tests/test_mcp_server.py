@@ -92,6 +92,9 @@ def test_real_mcp_client_receives_structured_payload_v1():
 
     tools, result = asyncio.run(call_tool())
 
+    tool_names = {tool.name for tool in tools.tools}
+    assert "get_ableton_session" in tool_names
+    assert "generate_and_insert_melody" in tool_names
     tool = next(tool for tool in tools.tools if tool.name == "generate_melody")
     assert tool.output_schema is not None
     assert "time_signature" in tool.output_schema["required"]
@@ -164,6 +167,18 @@ def _import_roots(paths):
 
 def test_core_and_integration_layers_preserve_dependency_boundaries():
     source_root = Path(__file__).parents[1] / "src" / "midi_generator"
+    domain_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (source_root / "domain").glob("*.py")
+    )
+    generation_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (source_root / "generation").glob("*.py")
+    )
+    integration_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (source_root / "integration").glob("*.py")
+    )
     domain_imports = _import_roots((source_root / "domain").glob("*.py"))
     generation_imports = _import_roots((source_root / "generation").glob("*.py"))
     integration_imports = _import_roots((source_root / "integration").glob("*.py"))
@@ -171,6 +186,9 @@ def test_core_and_integration_layers_preserve_dependency_boundaries():
     assert {"mcp", "mido", "ableton"}.isdisjoint(domain_imports)
     assert {"mcp", "mido", "ableton"}.isdisjoint(generation_imports)
     assert {"mcp", "ableton"}.isdisjoint(integration_imports)
+    assert "midi_generator.ableton" not in domain_source
+    assert "midi_generator.ableton" not in generation_source
+    assert "midi_generator.ableton" not in integration_source
 
 
 def test_mcp_layer_contains_no_musical_generation_rules():
