@@ -21,11 +21,6 @@ class MidiGeneratorBridge(ControlSurface):
             self._command_queue, config["host"], config["port"]
         )
         self._bridge_server.start()
-        self.log_message(
-            "MidiGeneratorBridge listening on {}:{}".format(
-                config["host"], config["port"]
-            )
-        )
 
     def update_display(self):
         super().update_display()
@@ -40,7 +35,6 @@ class MidiGeneratorBridge(ControlSurface):
             except BridgeCommandError as error:
                 response = error_response(request_id, error.code, error.message)
             except Exception as error:
-                self.log_message("MidiGeneratorBridge command failed: {}".format(error))
                 response = error_response(
                     request_id, "LIVE_API_ERROR", "Ableton Live rejected the command."
                 )
