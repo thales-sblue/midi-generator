@@ -11,3 +11,4 @@ class NoteEvent:
     velocity: int
     channel: int = 0
     track: int = 0
+    mute: bool = False

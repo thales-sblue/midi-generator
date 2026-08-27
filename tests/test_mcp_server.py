@@ -95,6 +95,7 @@ def test_real_mcp_client_receives_structured_payload_v1():
     tool_names = {tool.name for tool in tools.tools}
     assert "get_ableton_session" in tool_names
     assert "generate_and_insert_melody" in tool_names
+    assert "transform_ableton_midi_clip" in tool_names
     tool = next(tool for tool in tools.tools if tool.name == "generate_melody")
     assert tool.output_schema is not None
     assert "time_signature" in tool.output_schema["required"]
@@ -142,6 +143,7 @@ def test_real_stdio_process_exposes_deterministic_payload_and_errors():
     )
 
     assert any(tool.name == "generate_melody" for tool in tools.tools)
+    assert any(tool.name == "transform_ableton_midi_clip" for tool in tools.tools)
     assert first.is_error is False
     assert first.structured_content is not None
     assert first.structured_content["schema_version"] == 1
@@ -206,3 +208,24 @@ def test_mcp_layer_contains_no_musical_generation_rules():
     assert "SCALE_INTERVALS" not in source
     assert "generate_plan(request)" in source
     assert "composition_to_payload" in source
+
+
+def test_transformations_are_independent_and_use_only_seeded_random():
+    root = Path(__file__).parents[1] / "src" / "midi_generator" / "transformations"
+    paths = tuple(root.glob("*.py"))
+    source = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+    imports = _import_roots(paths)
+
+    assert {"mcp", "mido", "ableton", "Live"}.isdisjoint(imports)
+    assert "random.Random(seed)" in source
+    assert "random.randint" not in source
+
+
+def test_remote_script_contains_no_transformation_algorithms():
+    root = Path(__file__).parents[1] / "ableton_remote_script" / "MidiGeneratorBridge"
+    source = "\n".join(path.read_text(encoding="utf-8") for path in root.glob("*.py"))
+
+    assert "transpose" not in source
+    assert "quantize" not in source
+    assert "humanize" not in source
+    assert "random" not in source

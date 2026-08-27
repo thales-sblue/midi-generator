@@ -13,11 +13,15 @@ from midi_generator.integration import (
     composition_to_payload,
     validate_payload_v1,
 )
+from midi_generator.mcp.ableton_transform import (
+    TransformedClipResult,
+    transform_midi_clip_copy,
+)
 
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 
@@ -93,6 +97,38 @@ def duplicate_ableton_midi_clip(
             source_scene_index,
             target_track_index,
             target_scene_index,
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def transform_ableton_midi_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    transform: str,
+    semitones: int | None = None,
+    grid: str | None = None,
+    seed: int | None = None,
+    max_timing_shift: float | None = None,
+    max_velocity_delta: int | None = None,
+) -> TransformedClipResult:
+    """Apply a deterministic transform to a duplicate in an empty clip slot."""
+    try:
+        return transform_midi_clip_copy(
+            AbletonClient(),
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            transform,
+            semitones,
+            grid,
+            seed,
+            max_timing_shift,
+            max_velocity_delta,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

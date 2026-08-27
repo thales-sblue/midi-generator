@@ -13,6 +13,7 @@ from midi_generator.mcp.server import (
     get_ableton_session,
     mcp,
     replace_ableton_midi_clip_notes,
+    transform_ableton_midi_clip,
 )
 
 
@@ -148,3 +149,84 @@ def test_mcp_client_calls_read_clip_tool(monkeypatch):
     result = asyncio.run(call_tool())
     assert result.is_error is False
     assert result.structured_content["clip_fingerprint"] == "abc"
+
+
+class TransformingFakeAbletonClient(FakeAbletonClient):
+    def __init__(self):
+        super().__init__()
+        self.reads = []
+
+    def get_midi_clip(self, track_index, scene_index):
+        self.reads.append((track_index, scene_index))
+        fingerprint = "source" if (track_index, scene_index) == (0, 0) else "copy"
+        return {
+            "track_index": track_index,
+            "scene_index": scene_index,
+            "clip_length_beats": 4.0,
+            "notes": [{"pitch": 60, "start_time": 0.5, "duration": 0.5, "velocity": 90, "mute": False}],
+            "clip_fingerprint": fingerprint,
+        }
+
+    def replace_midi_clip_notes(self, track_index, scene_index, expected_fingerprint, notes):
+        self.replaced = (track_index, scene_index, expected_fingerprint, notes)
+        return {"replaced": True, "clip_length_beats": 4.0, "note_count": len(notes), "clip_fingerprint": "result"}
+
+
+def test_transform_tool_returns_structured_result_and_only_edits_copy(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(0, 0, 0, 1, "transpose", semitones=12)
+
+    assert fake.reads == [(0, 0), (0, 1)]
+    assert fake.duplicated == (0, 0, 0, 1)
+    assert fake.replaced[:3] == (0, 1, "copy")
+    assert fake.replaced[3][0]["pitch"] == 72
+    assert result["source_clip_fingerprint"] == "source"
+    assert result["target_clip_fingerprint"] == "result"
+
+
+def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            tools = await client.list_tools()
+            result = await client.call_tool(
+                "transform_ableton_midi_clip",
+                {"source_track_index": 0, "source_scene_index": 0, "target_track_index": 0, "target_scene_index": 1, "transform": "quantize", "grid": "1/16"},
+            )
+            return tools, result
+
+    tools, result = asyncio.run(call_tool())
+
+    assert "transform_ableton_midi_clip" in {tool.name for tool in tools.tools}
+    tool = next(tool for tool in tools.tools if tool.name == "transform_ableton_midi_clip")
+    assert set(tool.output_schema["required"]) >= {
+        "transformed",
+        "transform",
+        "source_clip_fingerprint",
+        "target_clip_fingerprint",
+    }
+    assert result.is_error is False
+    assert result.structured_content["transformed"] is True
+    assert result.structured_content["target_clip_fingerprint"] == "result"
+
+
+def test_transform_tool_validates_parameters_before_ableton_read(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "transform_ableton_midi_clip",
+                {"source_track_index": 0, "source_scene_index": 0, "target_track_index": 0, "target_scene_index": 1, "transform": "humanize", "seed": 42},
+            )
+
+    result = asyncio.run(call_tool())
+
+    assert result.is_error is True
+    assert "humanize requires" in result.content[0].text
+    assert fake.reads == []

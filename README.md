@@ -27,6 +27,8 @@ O projeto inclui uma ponte opcional para Ableton Live 12 Lite. O motor, a export
 
 O motor de composição é independente de bibliotecas MIDI: ele transforma um `MelodyRequest` em um `CompositionPlan` formado por `NoteEvent`s. O `MidiExporter` é a única camada que usa Mido para converter esse plano em arquivo `.mid`.
 
+A camada `transformations/` reutiliza `NoteEvent` e acrescenta somente o contêiner imutável `EditableMidiClip`, necessário para carregar o comprimento do clip e validar suas bordas. `NoteEvent` inclui `mute=False`, preservando compatibilidade com a geração e permitindo representar fielmente as notas lidas do Live. As transformações operam em ticks inteiros, com 480 ticks por beat, sem Mido, Live API ou efeitos colaterais.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.
@@ -40,6 +42,18 @@ MelodyRequest -> geração -> CompositionPlan
                                   MCP Server
                                       ↑
                                   MCP Client
+```
+
+Para clips existentes, a separação é:
+
+```text
+Ableton snapshot em beats
+        ↓ integration/ (conversão determinística para 480 ticks/beat)
+EditableMidiClip + NoteEvent
+        ↓ transformations/ (algoritmos musicais puros)
+notas transformadas
+        ↓ mcp/ (orquestração segura)
+AbletonClient → Remote Script (somente primitivas de baixo nível)
 ```
 
 O contrato está em `midi_generator.integration` e pode ser usado sem exportar MIDI:
@@ -56,7 +70,7 @@ assert payload["schema_version"] == 1
 
 ## Servidor MCP
 
-O servidor MCP expõe a tool `generate_melody` pelo transporte local `stdio`. Ele é somente uma camada de comunicação: constrói um `MelodyRequest`, reutiliza `generate_plan()` e serializa o resultado com `composition_to_payload()`. A composição continua pertencendo ao motor e não há integração com Ableton nesta etapa.
+O servidor MCP expõe `generate_melody` e as tools opcionais do Ableton pelo transporte local `stdio`. Para geração, ele constrói um `MelodyRequest`, reutiliza `generate_plan()` e serializa o resultado com `composition_to_payload()`. Para transformação, ele apenas orquestra adapters e o motor puro; a lógica musical continua fora do servidor.
 
 Com o ambiente virtual ativado, inicie o servidor:
 
@@ -209,7 +223,7 @@ clip_length = total_duration_ticks / ticks_per_beat
 
 O Remote Script usa `ClipSlot.create_clip()` e objetos `Live.Clip.MidiNoteSpecification` com `Clip.add_new_notes()`. A integração cobre clips MIDI na Session View; não controla transporte e não cria tracks, instrumentos ou devices.
 
-### Leitura e edição segura de clips MIDI
+### Leitura, edição e transformação segura de clips MIDI
 
 As tools `get_ableton_midi_clip`, `replace_ableton_midi_clip_notes` e `duplicate_ableton_midi_clip` completam o fluxo de ida e volta para clips MIDI existentes:
 
@@ -230,6 +244,17 @@ original
 duplicate_ableton_midi_clip (somente para slot vazio)
    ↓
 edit copy
+
+DOMAIN TRANSFORMATION
+READ source clip
+   ↓
+validate + dry-run no domínio
+   ↓
+safe duplicate para slot vazio
+   ↓
+READ copy + DOMAIN TRANSFORMATION
+   ↓
+replace copy com o fingerprint da cópia
 ```
 
 `get_ableton_midi_clip` retorna nome, comprimento em beats, estado de loop e as propriedades mínimas de cada nota (`pitch`, `start_time`, `duration`, `velocity` e `mute`). As notas são ordenadas por posição, pitch e duração.
@@ -266,9 +291,66 @@ Exemplo de duplicação não destrutiva:
 }
 ```
 
-O MCP apenas encaminha essas primitivas ao `AbletonClient`; decisões musicais e interpretação de linguagem natural continuam fora do bridge e do servidor MCP.
+### Transformações determinísticas v1
 
-**VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das três tools MCP.
+`transform_ableton_midi_clip` executa o fluxo completo de leitura, validação, duplicação, nova leitura da cópia, transformação e substituição com controle de concorrência. O slot de destino deve estar vazio e ser diferente do source. O clip original nunca é enviado para `replace_midi_clip_notes`.
+
+Transpose em uma oitava:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "transpose",
+  "semitones": 12
+}
+```
+
+`transpose` preserva timing, duração, velocity e mute. Se qualquer pitch resultante ficar fora de `0..127`, toda a operação falha no dry-run, antes da duplicação.
+
+Quantize para semicolcheias:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "quantize",
+  "grid": "1/16"
+}
+```
+
+`quantize` aceita `1/4`, `1/8` e `1/16` em 4/4. O início é arredondado para a grade mais próxima em ticks inteiros; empates avançam para a próxima linha da grade. A duração original é preservada, exceto quando o novo início faria a nota ultrapassar o fim do clip: nesse caso ela é truncada até a borda. Se a grade arredondasse o início para o próprio fim do clip, usa-se a última linha válida anterior. Nenhuma nota começa antes de zero ou termina depois do clip.
+
+Humanize determinístico:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "humanize",
+  "seed": 42,
+  "max_timing_shift": 0.05,
+  "max_velocity_delta": 5
+}
+```
+
+Na API MCP, `max_timing_shift` é expresso em beats e convertido deterministicamente para o tick mais próximo. `humanize` exige `seed` e usa exclusivamente `random.Random(seed)`. O deslocamento de timing e a variação de velocity são sorteados dentro dos limites informados; pitch, duração e mute são preservados, velocity é limitada a `1..127`, e o timing é limitado às bordas do clip.
+
+Todos os parâmetros e o snapshot source são validados, e a transformação completa é simulada, antes de criar a cópia. O target vazio ainda é garantido atomicamente pela primitiva `duplicate_midi_clip` no bridge. Existe um limite de atomicidade inevitável entre comandos: se a duplicação funcionar e uma falha externa ocorrer depois (por exemplo, o usuário alterar a cópia e causar `CLIP_CHANGED`, o Live fechar ou a conexão cair), a cópia não transformada pode permanecer no target. Não há rollback ou deleção implícita; o source continua intacto e a ocorrência deve ser resolvida explicitamente pelo usuário no Live.
+
+As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonClient`. A nova tool de alto nível orquestra o fluxo, mas os algoritmos musicais ficam exclusivamente em `transformations/`. Não existe interpretação de linguagem natural, aleatoriedade global ou lógica musical no Ableton bridge.
+
+**VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das tools MCP de baixo nível.
+
+A suíte também cobre transpose positivo e negativo, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
+
+As transformações desta versão operam somente sobre MIDI clips da Session View. Não criam tracks, instrumentos ou devices e não controlam transporte, Arrangement View, automações, mixagem ou áudio.
 
 Validação manual concluída em 26 de agosto de 2026 com Ableton Live 12 Lite 12.4.5 no Windows. O `doctor` confirmou a conexão e a compatibilidade do protocolo; `get_ableton_session` retornou duas pistas MIDI e oito cenas; e `generate_and_insert_melody` criou e exibiu corretamente um clip na primeira cena da pista `1-MIDI`, usando 120 BPM, Dó menor, quatro compassos e seed 42. O resultado teve 16 beats e seis notas. Status: **VALIDADO MANUALMENTE EM LIVE 12.4.5**.
 
