@@ -6,10 +6,13 @@ from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_plan
 from midi_generator.integration import composition_to_payload
 from midi_generator.mcp.server import (
+    duplicate_ableton_midi_clip,
     generate_and_insert_melody,
     generate_melody,
+    get_ableton_midi_clip,
     get_ableton_session,
     mcp,
+    replace_ableton_midi_clip_notes,
 )
 
 
@@ -42,6 +45,17 @@ class FakeAbletonClient:
             "note_count": len(payload["notes"]),
             "schema_version": payload["schema_version"],
         }
+
+    def get_midi_clip(self, track_index, scene_index):
+        return {"track_index": track_index, "scene_index": scene_index, "notes": [], "clip_fingerprint": "abc"}
+
+    def replace_midi_clip_notes(self, track_index, scene_index, expected_fingerprint, notes):
+        self.replaced = (track_index, scene_index, expected_fingerprint, notes)
+        return {"replaced": True, "clip_fingerprint": "def"}
+
+    def duplicate_midi_clip(self, source_track_index, source_scene_index, target_track_index, target_scene_index):
+        self.duplicated = (source_track_index, source_scene_index, target_track_index, target_scene_index)
+        return {"duplicated": True, "clip_fingerprint": "abc"}
 
 
 def test_get_ableton_session_uses_external_client(monkeypatch):
@@ -105,3 +119,32 @@ def test_mcp_client_calls_generate_and_insert_tool(monkeypatch):
     assert result.is_error is False
     assert result.structured_content["inserted"] is True
     assert result.structured_content["schema_version"] == 1
+
+
+def test_clip_tools_only_delegate_to_ableton_client(monkeypatch):
+    fake = FakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+    notes = [{"pitch": 72, "start_time": 0.0, "duration": 1.0, "velocity": 90, "mute": False}]
+
+    read = get_ableton_midi_clip(0, 1)
+    replaced = replace_ableton_midi_clip_notes(0, 1, "abc", notes)
+    duplicated = duplicate_ableton_midi_clip(0, 1, 0, 2)
+
+    assert read["clip_fingerprint"] == "abc"
+    assert fake.replaced == (0, 1, "abc", notes)
+    assert replaced["replaced"] is True
+    assert fake.duplicated == (0, 1, 0, 2)
+    assert duplicated["duplicated"] is True
+
+
+def test_mcp_client_calls_read_clip_tool(monkeypatch):
+    fake = FakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool("get_ableton_midi_clip", {"track_index": 0, "scene_index": 0})
+
+    result = asyncio.run(call_tool())
+    assert result.is_error is False
+    assert result.structured_content["clip_fingerprint"] == "abc"

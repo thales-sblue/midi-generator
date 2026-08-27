@@ -29,11 +29,34 @@ class FakeApplication:
 
 
 class FakeClip:
-    def __init__(self):
+    def __init__(self, notes=None, length=16.0, is_midi_clip=True):
         self.added = None
+        self.notes = list(notes or [])
+        self.length = length
+        self.name = "Melody"
+        self.looping = True
+        self.is_midi_clip = is_midi_clip
+        self.remove_calls = 0
 
     def add_new_notes(self, notes):
         self.added = notes
+        self.notes.extend(FakeNote(**note) if isinstance(note, dict) else note for note in notes)
+
+    def get_notes_extended(self, _from_pitch, _pitch_span, _from_time, _time_span):
+        return tuple(self.notes)
+
+    def remove_notes_extended(self, _from_pitch, _pitch_span, _from_time, _time_span):
+        self.remove_calls += 1
+        self.notes = []
+
+
+class FakeNote:
+    def __init__(self, pitch, start_time, duration, velocity, mute=False):
+        self.pitch = pitch
+        self.start_time = start_time
+        self.duration = duration
+        self.velocity = velocity
+        self.mute = mute
 
 
 class FakeClipSlot:
@@ -45,6 +68,7 @@ class FakeClipSlot:
     def create_clip(self, length):
         self.created_length = length
         self.has_clip = True
+        self.clip = FakeClip(length=length)
 
 
 class FakeTrack:
@@ -73,6 +97,17 @@ class FakeLiveContext:
 
     def song(self):
         return self._song
+
+
+def round_trip_context(notes=None, target_occupied=False, is_midi_clip=True):
+    source = FakeTrack(has_clip=True)
+    source.clip_slots[0].clip = FakeClip(
+        notes=notes, is_midi_clip=is_midi_clip
+    )
+    source.clip_slots.append(FakeClipSlot(has_clip=target_occupied))
+    context = FakeLiveContext(source)
+    context.song().scenes.append(FakeScene())
+    return context
 
 
 def test_payload_converts_ticks_and_notes_to_live_beats():
@@ -219,6 +254,93 @@ def test_dispatcher_rejects_missing_track_or_scene(track_index, scene_index, cod
         )
 
     assert caught.value.code == code
+
+
+def test_get_midi_clip_reads_sorted_notes_and_stable_fingerprint():
+    notes = [
+        FakeNote(67, 2.0, 0.5, 80, True),
+        FakeNote(64, 0.0, 1.0, 90),
+        FakeNote(60, 0.0, 0.5, 100),
+    ]
+    dispatcher = BridgeDispatcher(round_trip_context(notes))
+    request = {"request_id": "read", "command": "get_midi_clip", "params": {"track_index": 0, "scene_index": 0}}
+
+    first = dispatcher.dispatch(request)["result"]
+    second = dispatcher.dispatch(request)["result"]
+
+    assert [note["pitch"] for note in first["notes"]] == [60, 64, 67]
+    assert first["notes"][2]["mute"] is True
+    assert first["clip_fingerprint"] == second["clip_fingerprint"]
+    notes[0].pitch = 68
+    assert dispatcher.dispatch(request)["result"]["clip_fingerprint"] != first["clip_fingerprint"]
+
+
+@pytest.mark.parametrize(
+    ("context", "track_index", "scene_index", "code"),
+    [
+        (FakeLiveContext(), 0, 0, "CLIP_NOT_FOUND"),
+        (FakeLiveContext(), 1, 0, "TRACK_NOT_FOUND"),
+        (FakeLiveContext(), 0, 1, "SCENE_NOT_FOUND"),
+        (FakeLiveContext(FakeTrack(has_midi_input=False)), 0, 0, "TRACK_NOT_MIDI"),
+        (round_trip_context(is_midi_clip=False), 0, 0, "CLIP_NOT_MIDI"),
+    ],
+)
+def test_get_midi_clip_rejects_invalid_source(context, track_index, scene_index, code):
+    with pytest.raises(BridgeCommandError) as caught:
+        BridgeDispatcher(context).dispatch(
+            {"request_id": "read-error", "command": "get_midi_clip", "params": {"track_index": track_index, "scene_index": scene_index}}
+        )
+    assert caught.value.code == code
+
+
+def test_replace_notes_requires_current_fingerprint_and_updates_content():
+    context = round_trip_context([FakeNote(60, 0.0, 0.5, 90)])
+    dispatcher = BridgeDispatcher(context)
+    read_request = {"request_id": "read", "command": "get_midi_clip", "params": {"track_index": 0, "scene_index": 0}}
+    fingerprint = dispatcher.dispatch(read_request)["result"]["clip_fingerprint"]
+    replacement = [{"pitch": 72, "start_time": 1.0, "duration": 0.5, "velocity": 100, "mute": False}]
+
+    result = dispatcher.dispatch({"request_id": "replace", "command": "replace_midi_clip_notes", "params": {"track_index": 0, "scene_index": 0, "expected_fingerprint": fingerprint, "notes": replacement}})["result"]
+
+    assert result["replaced"] is True
+    assert result["clip_fingerprint"] != fingerprint
+    assert dispatcher.dispatch(read_request)["result"]["notes"] == replacement
+    with pytest.raises(BridgeCommandError) as caught:
+        dispatcher.dispatch({"request_id": "stale", "command": "replace_midi_clip_notes", "params": {"track_index": 0, "scene_index": 0, "expected_fingerprint": fingerprint, "notes": replacement}})
+    assert caught.value.code == "CLIP_CHANGED"
+
+
+@pytest.mark.parametrize(
+    ("notes", "code"),
+    [
+        ([{"pitch": 128, "start_time": 0.0, "duration": 0.5, "velocity": 90, "mute": False}], "INVALID_NOTE"),
+        ([{"pitch": 60, "start_time": 15.75, "duration": 0.5, "velocity": 90, "mute": False}], "NOTE_OUTSIDE_CLIP"),
+    ],
+)
+def test_invalid_replace_does_not_mutate_clip(notes, code):
+    context = round_trip_context([FakeNote(60, 0.0, 0.5, 90)])
+    dispatcher = BridgeDispatcher(context)
+    fingerprint = dispatcher.dispatch({"request_id": "r", "command": "get_midi_clip", "params": {"track_index": 0, "scene_index": 0}})["result"]["clip_fingerprint"]
+    clip = context.song().tracks[0].clip_slots[0].clip
+    with pytest.raises(BridgeCommandError) as caught:
+        dispatcher.dispatch({"request_id": "bad", "command": "replace_midi_clip_notes", "params": {"track_index": 0, "scene_index": 0, "expected_fingerprint": fingerprint, "notes": notes}})
+    assert caught.value.code == code
+    assert clip.remove_calls == 0
+    assert clip.notes[0].pitch == 60
+
+
+def test_duplicate_midi_clip_copies_content_into_empty_slot():
+    context = round_trip_context([FakeNote(60, 0.0, 0.5, 90)])
+    result = BridgeDispatcher(context).dispatch({"request_id": "copy", "command": "duplicate_midi_clip", "params": {"source_track_index": 0, "source_scene_index": 0, "target_track_index": 0, "target_scene_index": 1}})["result"]
+    assert result["duplicated"] is True
+    assert result["notes"][0]["pitch"] == 60
+    assert context.song().tracks[0].clip_slots[1].clip.name == "Melody"
+
+
+def test_duplicate_midi_clip_refuses_occupied_target():
+    with pytest.raises(BridgeCommandError) as caught:
+        BridgeDispatcher(round_trip_context(target_occupied=True)).dispatch({"request_id": "copy", "command": "duplicate_midi_clip", "params": {"source_track_index": 0, "source_scene_index": 0, "target_track_index": 0, "target_scene_index": 1}})
+    assert caught.value.code == "TARGET_CLIP_SLOT_NOT_EMPTY"
 
 
 def test_remote_script_sources_compile_without_live_installed():

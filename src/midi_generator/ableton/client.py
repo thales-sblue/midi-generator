@@ -52,6 +52,46 @@ class AbletonClient:
             },
         )
 
+    def get_midi_clip(self, track_index: int, scene_index: int) -> dict[str, Any]:
+        return self._call(
+            "get_midi_clip",
+            {"track_index": track_index, "scene_index": scene_index},
+        )
+
+    def replace_midi_clip_notes(
+        self,
+        track_index: int,
+        scene_index: int,
+        expected_fingerprint: str,
+        notes: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self._call(
+            "replace_midi_clip_notes",
+            {
+                "track_index": track_index,
+                "scene_index": scene_index,
+                "expected_fingerprint": expected_fingerprint,
+                "notes": notes,
+            },
+        )
+
+    def duplicate_midi_clip(
+        self,
+        source_track_index: int,
+        source_scene_index: int,
+        target_track_index: int,
+        target_scene_index: int,
+    ) -> dict[str, Any]:
+        return self._call(
+            "duplicate_midi_clip",
+            {
+                "source_track_index": source_track_index,
+                "source_scene_index": source_scene_index,
+                "target_track_index": target_track_index,
+                "target_scene_index": target_scene_index,
+            },
+        )
+
     def _call(self, command: str, params: dict[str, Any]) -> dict[str, Any]:
         request = make_request(command, params)
         try:

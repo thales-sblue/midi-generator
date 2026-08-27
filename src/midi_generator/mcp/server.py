@@ -55,6 +55,50 @@ def get_ableton_session() -> dict[str, Any]:
 
 
 @mcp.tool()
+def get_ableton_midi_clip(track_index: int, scene_index: int) -> dict[str, Any]:
+    """Read the editable MIDI note content and fingerprint of an Ableton clip."""
+    try:
+        return AbletonClient().get_midi_clip(track_index, scene_index)
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def replace_ableton_midi_clip_notes(
+    track_index: int,
+    scene_index: int,
+    expected_fingerprint: str,
+    notes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Replace MIDI notes only if the Ableton clip fingerprint still matches."""
+    try:
+        return AbletonClient().replace_midi_clip_notes(
+            track_index, scene_index, expected_fingerprint, notes
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def duplicate_ableton_midi_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+) -> dict[str, Any]:
+    """Duplicate an Ableton MIDI clip into an empty Session View slot."""
+    try:
+        return AbletonClient().duplicate_midi_clip(
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
 def generate_and_insert_melody(
     bpm: int,
     root_note: str,

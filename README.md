@@ -207,6 +207,69 @@ duration = duration_ticks / ticks_per_beat
 clip_length = total_duration_ticks / ticks_per_beat
 ```
 
-O Remote Script usa `ClipSlot.create_clip()` e objetos `Live.Clip.MidiNoteSpecification` com `Clip.add_new_notes()`. A implementação cobre somente clips MIDI novos na Session View. Não edita clips existentes, não controla transporte e não cria tracks, instrumentos ou devices.
+O Remote Script usa `ClipSlot.create_clip()` e objetos `Live.Clip.MidiNoteSpecification` com `Clip.add_new_notes()`. A integração cobre clips MIDI na Session View; não controla transporte e não cria tracks, instrumentos ou devices.
+
+### Leitura e edição segura de clips MIDI
+
+As tools `get_ableton_midi_clip`, `replace_ableton_midi_clip_notes` e `duplicate_ableton_midi_clip` completam o fluxo de ida e volta para clips MIDI existentes:
+
+```text
+READ
+get_ableton_midi_clip
+        ↓
+clip + notes + fingerprint
+
+EDIT
+clip + notes modificadas + fingerprint
+        ↓
+replace_ableton_midi_clip_notes
+
+SAFE VARIATION
+original
+   ↓
+duplicate_ableton_midi_clip (somente para slot vazio)
+   ↓
+edit copy
+```
+
+`get_ableton_midi_clip` retorna nome, comprimento em beats, estado de loop e as propriedades mínimas de cada nota (`pitch`, `start_time`, `duration`, `velocity` e `mute`). As notas são ordenadas por posição, pitch e duração.
+
+O `clip_fingerprint` é um SHA-256 de JSON canônico formado pelo comprimento do clip e pelas notas ordenadas, com floats normalizados a nove casas decimais. Toda substituição exige o fingerprint obtido na leitura. Se o conteúdo tiver mudado no Live desde então, o bridge recusa a operação com `CLIP_CHANGED`; o cliente deve ler novamente antes de editar. Requests inválidos são validados integralmente antes da remoção das notas existentes, e notas além do comprimento atual falham com `NOTE_OUTSIDE_CLIP`. O comprimento nunca é alterado implicitamente.
+
+Exemplo de leitura:
+
+```json
+{"track_index": 0, "scene_index": 0}
+```
+
+Exemplo de substituição baseada na leitura:
+
+```json
+{
+  "track_index": 0,
+  "scene_index": 0,
+  "expected_fingerprint": "<fingerprint retornado pela leitura>",
+  "notes": [
+    {"pitch": 72, "start_time": 0.0, "duration": 0.5, "velocity": 90, "mute": false}
+  ]
+}
+```
+
+Exemplo de duplicação não destrutiva:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1
+}
+```
+
+O MCP apenas encaminha essas primitivas ao `AbletonClient`; decisões musicais e interpretação de linguagem natural continuam fora do bridge e do servidor MCP.
+
+**VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das três tools MCP.
 
 Validação manual concluída em 26 de agosto de 2026 com Ableton Live 12 Lite 12.4.5 no Windows. O `doctor` confirmou a conexão e a compatibilidade do protocolo; `get_ableton_session` retornou duas pistas MIDI e oito cenas; e `generate_and_insert_melody` criou e exibiu corretamente um clip na primeira cena da pista `1-MIDI`, usando 120 BPM, Dó menor, quatro compassos e seed 42. O resultado teve 16 beats e seis notas. Status: **VALIDADO MANUALMENTE EM LIVE 12.4.5**.
+
+Em 27 de agosto de 2026, o fluxo de edição também foi **VALIDADO MANUALMENTE EM LIVE 12.4.5**: o bridge leu as cinco notas de um clip de oito beats, duplicou o original para um slot vazio, elevou somente a última nota da cópia de pitch 74 para 86 e preservou o fingerprint do original. A leitura posterior confirmou o novo conteúdo e uma repetição da escrita com o fingerprint anterior foi recusada com `CLIP_CHANGED`. A comparação no editor MIDI do Live confirmou visualmente o original intacto e a última nota uma oitava acima somente na cópia.

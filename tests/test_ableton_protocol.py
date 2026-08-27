@@ -167,3 +167,31 @@ def test_create_midi_clip_sends_exact_integration_payload():
         "payload": payload,
     }
     assert result["inserted"] is True
+
+
+@pytest.mark.parametrize(
+    ("invoke", "command", "params"),
+    [
+        (lambda client: client.get_midi_clip(2, 3), "get_midi_clip", {"track_index": 2, "scene_index": 3}),
+        (lambda client: client.replace_midi_clip_notes(2, 3, "abc", [{"pitch": 60}]), "replace_midi_clip_notes", {"track_index": 2, "scene_index": 3, "expected_fingerprint": "abc", "notes": [{"pitch": 60}]}),
+        (lambda client: client.duplicate_midi_clip(0, 1, 2, 3), "duplicate_midi_clip", {"source_track_index": 0, "source_scene_index": 1, "target_track_index": 2, "target_scene_index": 3}),
+    ],
+)
+def test_clip_client_methods_send_exact_commands(invoke, command, params):
+    captured = []
+    def respond(request):
+        captured.append(request)
+        return {"request_id": request["request_id"], "ok": True, "result": {"accepted": True}}
+    with fake_bridge(respond) as port:
+        assert invoke(AbletonClient(port=port))["accepted"] is True
+    assert captured[0]["command"] == command
+    assert captured[0]["params"] == params
+
+
+def test_clip_changed_error_code_is_propagated():
+    def respond(request):
+        return {"request_id": request["request_id"], "ok": False, "error": {"code": "CLIP_CHANGED", "message": "Read it again."}}
+    with fake_bridge(respond) as port:
+        with pytest.raises(AbletonCommandError) as caught:
+            AbletonClient(port=port).replace_midi_clip_notes(0, 0, "old", [])
+    assert caught.value.code == "CLIP_CHANGED"
