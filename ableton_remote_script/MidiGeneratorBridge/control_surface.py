@@ -3,6 +3,7 @@
 import os
 import queue
 
+import Live
 from ableton.v2.control_surface import ControlSurface
 from Live.Clip import MidiNoteSpecification
 
@@ -11,11 +12,26 @@ from .config import load_config
 from .socket_server import BridgeSocketServer
 
 
+class LiveContext:
+    """Stable access to the LOM without relying on ControlSurface conveniences."""
+
+    def __init__(self, c_instance):
+        self._c_instance = c_instance
+
+    def application(self):
+        return Live.Application.get_application()
+
+    def song(self):
+        return self._c_instance.song()
+
+
 class MidiGeneratorBridge(ControlSurface):
     def __init__(self, c_instance):
         super().__init__(c_instance)
         self._command_queue = queue.Queue()
-        self._dispatcher = BridgeDispatcher(self, note_factory=MidiNoteSpecification)
+        self._dispatcher = BridgeDispatcher(
+            LiveContext(c_instance), note_factory=MidiNoteSpecification
+        )
         config = load_config(os.path.dirname(__file__))
         self._bridge_server = BridgeSocketServer(
             self._command_queue, config["host"], config["port"]

@@ -247,6 +247,8 @@ def test_remote_control_surface_uses_live_midi_note_specifications():
 
     assert "from Live.Clip import MidiNoteSpecification" in source
     assert "note_factory=MidiNoteSpecification" in source
+    assert "Live.Application.get_application()" in source
+    assert "self._c_instance.song()" in source
     assert "log_message" not in source
 
 
