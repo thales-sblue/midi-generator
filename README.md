@@ -27,6 +27,8 @@ O motor de composição é independente de bibliotecas MIDI: ele transforma um `
 
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
+O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.
+
 ```text
                          ┌─> MidiExporter -> .mid
 MelodyRequest -> geração -> CompositionPlan
@@ -83,6 +85,8 @@ A resposta estruturada usa diretamente o Integration Payload v1:
   "scale": "minor",
   "bars": 4,
   "seed": 42,
+  "time_signature": "4/4",
+  "ticks_per_beat": 480,
   "total_duration_ticks": 7680,
   "notes": [
     {"pitch": 74, "start": 2160, "duration": 240, "velocity": 60, "channel": 0, "track": 0}
@@ -93,6 +97,8 @@ A resposta estruturada usa diretamente o Integration Payload v1:
 ```
 
 O array `notes` acima está resumido; a resposta real contém todos os eventos gerados.
+
+Além dos testes rápidos em processo, a suíte inicia o entry point real em um processo Python separado e valida por `stdio` o handshake MCP, descoberta da tool, resposta estruturada, determinismo e erros de entrada. Esse teste usa apenas Python e o SDK declarado em `requirements.txt`, portanto também é executável no GitHub Actions com Ubuntu e Python 3.12.
 
 ## Testes
 

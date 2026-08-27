@@ -6,6 +6,7 @@ from .payload_v1 import (
     NotePayload,
     ReportPayload,
     composition_to_payload,
+    validate_payload_v1,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "NotePayload",
     "ReportPayload",
     "composition_to_payload",
+    "validate_payload_v1",
 ]

@@ -1,9 +1,12 @@
 import asyncio
+import ast
 import json
+import sys
 from pathlib import Path
 
 import pytest
 from mcp import Client
+from mcp.client.stdio import StdioServerParameters
 from mcp.server.mcpserver.exceptions import ToolError
 
 from midi_generator.domain import MelodyRequest
@@ -43,6 +46,8 @@ def test_tool_handler_returns_complete_json_safe_v1_payload():
     plan = generate_plan(MelodyRequest(**VALID_ARGUMENTS))
 
     assert payload["schema_version"] == 1
+    assert payload["time_signature"] == "4/4"
+    assert payload["ticks_per_beat"] == 480
     assert len(payload["notes"]) == len(plan.notes)
     assert payload["notes"] == composition_to_payload(plan)["notes"]
     assert json.loads(json.dumps(payload)) == payload
@@ -89,6 +94,8 @@ def test_real_mcp_client_receives_structured_payload_v1():
 
     tool = next(tool for tool in tools.tools if tool.name == "generate_melody")
     assert tool.output_schema is not None
+    assert "time_signature" in tool.output_schema["required"]
+    assert "ticks_per_beat" in tool.output_schema["required"]
     assert result.is_error is False
     assert result.structured_content == generate_melody(**VALID_ARGUMENTS)
     assert result.structured_content["schema_version"] == 1
@@ -108,14 +115,62 @@ def test_real_mcp_client_reports_engine_validation_error():
     assert "Root note must be" in result.content[0].text
 
 
-def test_core_layers_do_not_depend_on_mcp():
-    source_root = Path(__file__).parents[1] / "src" / "midi_generator"
-    core_files = list((source_root / "domain").glob("*.py")) + list(
-        (source_root / "generation").glob("*.py")
+def test_real_stdio_process_exposes_deterministic_payload_and_errors():
+    project_root = Path(__file__).parents[1]
+    parameters = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "midi_generator.mcp"],
+        env={"PYTHONPATH": str(project_root / "src")},
+        cwd=project_root,
     )
 
-    assert core_files
-    assert all("mcp" not in path.read_text(encoding="utf-8") for path in core_files)
+    async def exercise_server():
+        async with Client(parameters, read_timeout_seconds=10) as client:
+            tools = await client.list_tools()
+            first = await client.call_tool("generate_melody", VALID_ARGUMENTS)
+            second = await client.call_tool("generate_melody", VALID_ARGUMENTS)
+            invalid = await client.call_tool(
+                "generate_melody", VALID_ARGUMENTS | {"root_note": "H"}
+            )
+            return tools, first, second, invalid
+
+    tools, first, second, invalid = asyncio.run(
+        asyncio.wait_for(exercise_server(), timeout=20)
+    )
+
+    assert any(tool.name == "generate_melody" for tool in tools.tools)
+    assert first.is_error is False
+    assert first.structured_content is not None
+    assert first.structured_content["schema_version"] == 1
+    assert first.structured_content["time_signature"] == "4/4"
+    assert first.structured_content["ticks_per_beat"] == 480
+    assert first.structured_content["notes"]
+    assert second.structured_content == first.structured_content
+    assert invalid.is_error is True
+    assert "Root note must be" in invalid.content[0].text
+
+
+def _import_roots(paths):
+    roots = set()
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                roots.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                roots.add(node.module.split(".")[0])
+    return roots
+
+
+def test_core_and_integration_layers_preserve_dependency_boundaries():
+    source_root = Path(__file__).parents[1] / "src" / "midi_generator"
+    domain_imports = _import_roots((source_root / "domain").glob("*.py"))
+    generation_imports = _import_roots((source_root / "generation").glob("*.py"))
+    integration_imports = _import_roots((source_root / "integration").glob("*.py"))
+
+    assert {"mcp", "mido", "ableton"}.isdisjoint(domain_imports)
+    assert {"mcp", "mido", "ableton"}.isdisjoint(generation_imports)
+    assert {"mcp", "ableton"}.isdisjoint(integration_imports)
 
 
 def test_mcp_layer_contains_no_musical_generation_rules():
