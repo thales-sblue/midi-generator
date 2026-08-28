@@ -9,6 +9,7 @@ from midi_generator.transformations import (
     retrograde,
     staccato,
     transpose,
+    transpose_diatonic,
 )
 
 
@@ -202,6 +203,38 @@ def test_constrain_to_scale_rejects_unknown_tonality_without_mutating_input():
             raise AssertionError("invalid tonality was accepted")
 
     assert clip.notes[0].pitch == 61
+
+
+def test_transpose_diatonic_moves_by_scale_degrees_and_preserves_properties():
+    original = (
+        NoteEvent(60, 0, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(64, 240, 120, 82),
+        NoteEvent(61, 480, 120, 73),
+    )
+    clip = make_clip(*original)
+
+    result = transpose_diatonic(clip, 2, "C", "major")
+
+    assert result.notes == (
+        NoteEvent(64, 0, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(67, 240, 120, 82),
+        NoteEvent(64, 480, 120, 73),
+    )
+    assert clip.notes == original
+
+
+def test_transpose_diatonic_rejects_invalid_steps_and_out_of_range_atomically():
+    clip = make_clip(NoteEvent(127, 0, 120, 90))
+
+    for steps, message in [(True, "steps"), (1, "outside 0..127")]:
+        try:
+            transpose_diatonic(clip, steps, "C", "major")
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("invalid diatonic transposition was accepted")
+
+    assert clip.notes[0].pitch == 127
 
 
 def test_quantize_supports_quarter_eighth_and_sixteenth_grids():

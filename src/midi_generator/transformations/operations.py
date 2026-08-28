@@ -107,6 +107,34 @@ def constrain_to_scale(
     )
 
 
+def transpose_diatonic(
+    clip: EditableMidiClip, steps: int, root_note: str, scale: str
+) -> EditableMidiClip:
+    """Transpose pitches by scale degrees, snapping foreign pitches downward on ties."""
+    clip.validate()
+    if not _is_int(steps):
+        raise ValueError("steps must be an integer.")
+    root, intervals = _scale_definition(root_note, scale)
+    allowed_pitch_classes = {(root + interval) % 12 for interval in intervals}
+    scale_pitches = tuple(
+        pitch for pitch in range(128) if pitch % 12 in allowed_pitch_classes
+    )
+    positions = {pitch: index for index, pitch in enumerate(scale_pitches)}
+    source_pitches = [
+        _nearest_scale_pitch(note.pitch, allowed_pitch_classes) for note in clip.notes
+    ]
+    target_indices = [positions[pitch] + steps for pitch in source_pitches]
+    if any(index < 0 or index >= len(scale_pitches) for index in target_indices):
+        raise ValueError("Diatonic transposition would produce a pitch outside 0..127.")
+    return replace(
+        clip,
+        notes=tuple(
+            replace(note, pitch=scale_pitches[index])
+            for note, index in zip(clip.notes, target_indices, strict=True)
+        ),
+    )
+
+
 def quantize(clip: EditableMidiClip, grid: str) -> EditableMidiClip:
     """Quantize starts to the nearest grid; keep duration unless the clip truncates it."""
     clip.validate()

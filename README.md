@@ -447,6 +447,27 @@ MANUAL**. A lógica de domínio, o preflight e a orquestração MCP são coberto
 automaticamente; a escrita no piano roll do Live deve ser conferida antes de
 registrar validação manual.
 
+Transposição diatônica por graus da tonalidade:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "transpose_diatonic",
+  "steps": 2,
+  "root_note": "C",
+  "scale": "major"
+}
+```
+
+`transpose_diatonic` move cada nota por `steps` graus da escala; por exemplo,
+em Dó maior, `steps = 2` move Dó para Mi. Notas externas à tonalidade são antes
+alinhadas à altura permitida mais próxima, com desempate para baixo. Se qualquer
+resultado exceder `0..127`, a operação inteira falha antes de duplicar o clip.
+Status da integração Live: **PENDENTE DE VALIDAÇÃO MANUAL**.
+
 Humanize determinístico:
 
 ```json

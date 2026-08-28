@@ -9,6 +9,7 @@ from .operations import (
     quantize,
     retrograde,
     staccato,
+    transpose_diatonic,
     transpose,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "quantize",
     "retrograde",
     "staccato",
+    "transpose_diatonic",
     "transpose",
 ]

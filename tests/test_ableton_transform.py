@@ -155,6 +155,27 @@ def test_constrain_to_scale_is_preflighted_and_applied_only_to_copy():
     assert result["transform"] == "constrain_to_scale"
 
 
+def test_diatonic_transposition_is_preflighted_and_applied_only_to_copy():
+    client = RecordingClient(source=snapshot(0, 0, "source", pitch=60))
+
+    result = transform_midi_clip_copy(
+        client,
+        0,
+        0,
+        0,
+        1,
+        "transpose_diatonic",
+        steps=2,
+        root_note="C",
+        scale="major",
+    )
+
+    assert [call[0] for call in client.calls] == ["get", "duplicate", "get", "replace"]
+    assert client.calls[-1][4][0]["pitch"] == 64
+    assert client.source["notes"][0]["pitch"] == 60
+    assert result["transform"] == "transpose_diatonic"
+
+
 def test_missing_tonality_fails_before_reading_source():
     client = RecordingClient()
 

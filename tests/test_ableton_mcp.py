@@ -280,6 +280,25 @@ def test_transform_tool_exposes_scale_constraint(monkeypatch):
     assert result["transform"] == "constrain_to_scale"
 
 
+def test_transform_tool_exposes_diatonic_transposition(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(
+        0,
+        0,
+        0,
+        1,
+        "transpose_diatonic",
+        steps=2,
+        root_note="C",
+        scale="major",
+    )
+
+    assert fake.replaced[3][0]["pitch"] == 64
+    assert result["transform"] == "transpose_diatonic"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

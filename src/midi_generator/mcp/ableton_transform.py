@@ -17,6 +17,7 @@ from midi_generator.transformations import (
     retrograde,
     staccato,
     transpose,
+    transpose_diatonic,
 )
 
 TRANSFORMS = {
@@ -28,6 +29,7 @@ TRANSFORMS = {
     "quantize",
     "humanize",
     "constrain_to_scale",
+    "transpose_diatonic",
 }
 
 
@@ -60,6 +62,7 @@ def transform_midi_clip_copy(
     max_duration: float | None = None,
     root_note: str | None = None,
     scale: str | None = None,
+    steps: int | None = None,
 ) -> TransformedClipResult:
     """Read, preflight, duplicate, transform and replace only the copied clip."""
     _validate_indices(
@@ -79,6 +82,7 @@ def transform_midi_clip_copy(
         max_duration,
         root_note,
         scale,
+        steps,
     )
 
     source_snapshot = client.get_midi_clip(source_track_index, source_scene_index)
@@ -117,6 +121,10 @@ def transform_midi_clip_copy(
 
 
 def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
+    if transform == "transpose_diatonic":
+        return transpose_diatonic(
+            clip, parameters["steps"], parameters["root_note"], parameters["scale"]
+        )
     if transform == "constrain_to_scale":
         return constrain_to_scale(clip, parameters["root_note"], parameters["scale"])
     if transform == "transpose":
@@ -150,11 +158,12 @@ def _validate_parameters(
     max_duration: float | None,
     root_note: str | None,
     scale: str | None,
+    steps: int | None,
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
         raise ValueError(
             "transform must be 'transpose', 'invert', 'retrograde', 'legato', "
-            "'staccato', 'constrain_to_scale', 'quantize', or 'humanize'."
+            "'staccato', 'constrain_to_scale', 'transpose_diatonic', 'quantize', or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
@@ -179,6 +188,10 @@ def _validate_parameters(
         if root_note is None or scale is None:
             raise ValueError("constrain_to_scale requires root_note and scale.")
         return {"root_note": root_note, "scale": scale}
+    if transform == "transpose_diatonic":
+        if steps is None or root_note is None or scale is None:
+            raise ValueError("transpose_diatonic requires steps, root_note and scale.")
+        return {"steps": steps, "root_note": root_note, "scale": scale}
     if transform == "quantize":
         if grid is None:
             raise ValueError("quantize requires grid.")
