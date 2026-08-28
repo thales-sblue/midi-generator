@@ -4,6 +4,7 @@ from .clip import EditableMidiClip
 from .operations import (
     constrain_to_scale,
     humanize,
+    harmonize_diatonic,
     invert,
     legato,
     quantize,
@@ -17,6 +18,7 @@ __all__ = [
     "EditableMidiClip",
     "constrain_to_scale",
     "humanize",
+    "harmonize_diatonic",
     "invert",
     "legato",
     "quantize",

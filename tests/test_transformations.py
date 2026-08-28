@@ -3,6 +3,7 @@ from midi_generator.transformations import (
     EditableMidiClip,
     constrain_to_scale,
     humanize,
+    harmonize_diatonic,
     invert,
     legato,
     quantize,
@@ -235,6 +236,29 @@ def test_transpose_diatonic_rejects_invalid_steps_and_out_of_range_atomically():
             raise AssertionError("invalid diatonic transposition was accepted")
 
     assert clip.notes[0].pitch == 127
+
+
+def test_harmonize_diatonic_adds_a_voice_without_altering_source_notes():
+    original = (NoteEvent(60, 0, 120, 90, channel=2, track=3, mute=True),)
+    clip = make_clip(*original)
+
+    result = harmonize_diatonic(clip, 2, "C", "major")
+
+    assert result.notes == original + (NoteEvent(64, 0, 120, 90, 2, 3, True),)
+    assert clip.notes == original
+
+
+def test_harmonize_diatonic_rejects_non_scale_or_out_of_range_source_atomically():
+    for clip, message in [
+        (make_clip(NoteEvent(61, 0, 120, 90)), "must belong"),
+        (make_clip(NoteEvent(127, 0, 120, 90)), "outside 0..127"),
+    ]:
+        try:
+            harmonize_diatonic(clip, 2, "C", "major")
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("invalid harmony was accepted")
 
 
 def test_quantize_supports_quarter_eighth_and_sixteenth_grids():

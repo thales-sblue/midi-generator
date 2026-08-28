@@ -135,6 +135,31 @@ def transpose_diatonic(
     )
 
 
+def harmonize_diatonic(
+    clip: EditableMidiClip, steps: int, root_note: str, scale: str
+) -> EditableMidiClip:
+    """Add a parallel diatonic voice while preserving every original note."""
+    clip.validate()
+    if not _is_int(steps) or steps == 0:
+        raise ValueError("steps must be a non-zero integer.")
+    root, intervals = _scale_definition(root_note, scale)
+    allowed = {(root + interval) % 12 for interval in intervals}
+    if any(note.pitch % 12 not in allowed for note in clip.notes):
+        raise ValueError("All source pitches must belong to the requested scale.")
+    pitches = tuple(pitch for pitch in range(128) if pitch % 12 in allowed)
+    positions = {pitch: index for index, pitch in enumerate(pitches)}
+    indices = [positions[note.pitch] + steps for note in clip.notes]
+    if any(index < 0 or index >= len(pitches) for index in indices):
+        raise ValueError("Diatonic harmony would produce a pitch outside 0..127.")
+    existing = set(clip.notes)
+    harmony = tuple(
+        replace(note, pitch=pitches[index])
+        for note, index in zip(clip.notes, indices, strict=True)
+        if replace(note, pitch=pitches[index]) not in existing
+    )
+    return replace(clip, notes=clip.notes + harmony)
+
+
 def quantize(clip: EditableMidiClip, grid: str) -> EditableMidiClip:
     """Quantize starts to the nearest grid; keep duration unless the clip truncates it."""
     clip.validate()
