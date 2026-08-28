@@ -3,22 +3,12 @@
 import random
 
 from midi_generator.domain import CompositionPlan, GenerationReport, MelodyRequest, NoteEvent
+from midi_generator.domain.music_theory import ROOT_NOTES, SCALE_INTERVALS
 from midi_generator.validation.musical_validation import validate_plan
 
 TICKS_PER_BEAT = 480
 BEATS_PER_BAR = 4
 STEP_TICKS = TICKS_PER_BEAT // 2
-
-ROOT_NOTES = {
-    "C": 0, "C#": 1, "DB": 1, "D": 2, "D#": 3, "EB": 3,
-    "E": 4, "F": 5, "F#": 6, "GB": 6, "G": 7, "G#": 8,
-    "AB": 8, "A": 9, "A#": 10, "BB": 10, "B": 11,
-}
-SCALE_INTERVALS = {
-    "major": (0, 2, 4, 5, 7, 9, 11),
-    "minor": (0, 2, 3, 5, 7, 8, 10),
-}
-
 
 def scale_notes(root_note: str, scale: str) -> tuple[int, ...]:
     root = 60 + ROOT_NOTES[root_note.upper()]

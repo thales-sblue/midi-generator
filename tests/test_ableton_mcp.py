@@ -268,6 +268,18 @@ def test_transform_tool_exposes_staccato_with_max_duration(monkeypatch):
     assert result["transform"] == "staccato"
 
 
+def test_transform_tool_exposes_scale_constraint(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(
+        0, 0, 0, 1, "constrain_to_scale", root_note="C", scale="major"
+    )
+
+    assert fake.replaced[3][0]["pitch"] == 60
+    assert result["transform"] == "constrain_to_scale"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

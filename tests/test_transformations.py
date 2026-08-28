@@ -1,6 +1,7 @@
 from midi_generator.domain import NoteEvent
 from midi_generator.transformations import (
     EditableMidiClip,
+    constrain_to_scale,
     humanize,
     invert,
     legato,
@@ -160,6 +161,47 @@ def test_staccato_rejects_non_positive_or_non_integer_duration():
             assert "positive integer" in str(error)
         else:
             raise AssertionError("invalid staccato duration was accepted")
+
+
+def test_constrain_to_scale_snaps_only_out_of_scale_notes_and_preserves_properties():
+    original = (
+        NoteEvent(61, 0, 120, 91, channel=2, track=3, mute=True),
+        NoteEvent(62, 240, 240, 82),
+        NoteEvent(66, 480, 120, 73),
+    )
+    clip = make_clip(*original)
+
+    result = constrain_to_scale(clip, "C", "major")
+
+    assert result.notes == (
+        NoteEvent(60, 0, 120, 91, channel=2, track=3, mute=True),
+        original[1],
+        NoteEvent(65, 480, 120, 73),
+    )
+    assert clip.notes == original
+    assert constrain_to_scale(result, "C", "major") == result
+
+
+def test_constrain_to_scale_uses_downward_tie_break_and_respects_midi_edges():
+    clip = make_clip(NoteEvent(1, 0, 120, 90), NoteEvent(127, 120, 120, 80))
+
+    result = constrain_to_scale(clip, "C", "major")
+
+    assert [note.pitch for note in result.notes] == [0, 127]
+
+
+def test_constrain_to_scale_rejects_unknown_tonality_without_mutating_input():
+    clip = make_clip(NoteEvent(61, 0, 120, 90))
+
+    for root_note, scale, message in [("H", "major", "root_note"), ("C", "dorian", "scale")]:
+        try:
+            constrain_to_scale(clip, root_note, scale)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("invalid tonality was accepted")
+
+    assert clip.notes[0].pitch == 61
 
 
 def test_quantize_supports_quarter_eighth_and_sixteenth_grids():

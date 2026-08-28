@@ -142,6 +142,28 @@ def test_staccato_is_preflighted_and_applied_only_to_copy():
     assert result["transform"] == "staccato"
 
 
+def test_constrain_to_scale_is_preflighted_and_applied_only_to_copy():
+    client = RecordingClient(source=snapshot(0, 0, "source", pitch=61))
+
+    result = transform_midi_clip_copy(
+        client, 0, 0, 0, 1, "constrain_to_scale", root_note="C", scale="major"
+    )
+
+    assert [call[0] for call in client.calls] == ["get", "duplicate", "get", "replace"]
+    assert client.calls[-1][4][0]["pitch"] == 60
+    assert client.source["notes"][0]["pitch"] == 61
+    assert result["transform"] == "constrain_to_scale"
+
+
+def test_missing_tonality_fails_before_reading_source():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="constrain_to_scale requires"):
+        transform_midi_clip_copy(client, 0, 0, 0, 1, "constrain_to_scale", root_note="C")
+
+    assert client.calls == []
+
+
 def test_missing_staccato_duration_fails_before_reading_source():
     client = RecordingClient()
 

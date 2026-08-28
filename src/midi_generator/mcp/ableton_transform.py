@@ -9,6 +9,7 @@ from midi_generator.integration import (
     clip_notes_to_ableton,
 )
 from midi_generator.transformations import (
+    constrain_to_scale,
     humanize,
     invert,
     legato,
@@ -26,6 +27,7 @@ TRANSFORMS = {
     "staccato",
     "quantize",
     "humanize",
+    "constrain_to_scale",
 }
 
 
@@ -56,6 +58,8 @@ def transform_midi_clip_copy(
     max_velocity_delta: int | None = None,
     axis_pitch: int | None = None,
     max_duration: float | None = None,
+    root_note: str | None = None,
+    scale: str | None = None,
 ) -> TransformedClipResult:
     """Read, preflight, duplicate, transform and replace only the copied clip."""
     _validate_indices(
@@ -73,6 +77,8 @@ def transform_midi_clip_copy(
         max_velocity_delta,
         axis_pitch,
         max_duration,
+        root_note,
+        scale,
     )
 
     source_snapshot = client.get_midi_clip(source_track_index, source_scene_index)
@@ -111,6 +117,8 @@ def transform_midi_clip_copy(
 
 
 def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
+    if transform == "constrain_to_scale":
+        return constrain_to_scale(clip, parameters["root_note"], parameters["scale"])
     if transform == "transpose":
         return transpose(clip, parameters["semitones"])
     if transform == "invert":
@@ -140,11 +148,13 @@ def _validate_parameters(
     max_velocity_delta: int | None,
     axis_pitch: int | None,
     max_duration: float | None,
+    root_note: str | None,
+    scale: str | None,
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
         raise ValueError(
             "transform must be 'transpose', 'invert', 'retrograde', 'legato', "
-            "'staccato', 'quantize', or 'humanize'."
+            "'staccato', 'constrain_to_scale', 'quantize', or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
@@ -165,6 +175,10 @@ def _validate_parameters(
         if duration_ticks <= 0:
             raise ValueError("max_duration must convert to at least one tick.")
         return {"max_duration_ticks": duration_ticks}
+    if transform == "constrain_to_scale":
+        if root_note is None or scale is None:
+            raise ValueError("constrain_to_scale requires root_note and scale.")
+        return {"root_note": root_note, "scale": scale}
     if transform == "quantize":
         if grid is None:
             raise ValueError("quantize requires grid.")

@@ -3,6 +3,8 @@
 import random
 from dataclasses import replace
 
+from midi_generator.domain.music_theory import ROOT_NOTES, SCALE_INTERVALS
+
 from .clip import EditableMidiClip
 
 GRID_TICKS = {"1/4": 480, "1/8": 240, "1/16": 120}
@@ -85,6 +87,26 @@ def staccato(clip: EditableMidiClip, max_duration: int) -> EditableMidiClip:
     )
 
 
+def constrain_to_scale(
+    clip: EditableMidiClip, root_note: str, scale: str
+) -> EditableMidiClip:
+    """Move out-of-scale pitches to the nearest pitch in a major or minor scale.
+
+    Equidistant choices resolve downward, which makes the operation fully
+    deterministic and avoids an unintended upward melodic drift.
+    """
+    clip.validate()
+    root, intervals = _scale_definition(root_note, scale)
+    allowed_pitch_classes = {(root + interval) % 12 for interval in intervals}
+    return replace(
+        clip,
+        notes=tuple(
+            replace(note, pitch=_nearest_scale_pitch(note.pitch, allowed_pitch_classes))
+            for note in clip.notes
+        ),
+    )
+
+
 def quantize(clip: EditableMidiClip, grid: str) -> EditableMidiClip:
     """Quantize starts to the nearest grid; keep duration unless the clip truncates it."""
     clip.validate()
@@ -135,6 +157,25 @@ def _round_to_grid(position: int, grid_ticks: int) -> int:
     if remainder * 2 >= grid_ticks:
         quotient += 1
     return quotient * grid_ticks
+
+
+def _scale_definition(root_note: str, scale: str) -> tuple[int, tuple[int, ...]]:
+    if not isinstance(root_note, str) or root_note.upper() not in ROOT_NOTES:
+        raise ValueError("root_note must be one of C, C#, Db, D, etc.")
+    if not isinstance(scale, str) or scale.lower() not in SCALE_INTERVALS:
+        raise ValueError("scale must be 'major' or 'minor'.")
+    return ROOT_NOTES[root_note.upper()], SCALE_INTERVALS[scale.lower()]
+
+
+def _nearest_scale_pitch(pitch: int, allowed_pitch_classes: set[int]) -> int:
+    for distance in range(13):
+        lower = pitch - distance
+        if lower >= 0 and lower % 12 in allowed_pitch_classes:
+            return lower
+        upper = pitch + distance
+        if upper <= 127 and upper % 12 in allowed_pitch_classes:
+            return upper
+    raise AssertionError("Every scale must contain a reachable MIDI pitch.")
 
 
 def _is_int(value: object) -> bool:

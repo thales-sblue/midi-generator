@@ -421,6 +421,32 @@ e track são preservados. A duração é convertida deterministicamente para tic
 deve resultar em pelo menos um tick e reaplicar o mesmo limite não altera
 novamente o resultado.
 
+Conformar uma melodia à tonalidade, preservando ritmo, velocity, mute, canal e
+track:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "constrain_to_scale",
+  "root_note": "C",
+  "scale": "major"
+}
+```
+
+`constrain_to_scale` mantém notas já pertencentes à escala e move cada nota
+externa para a altura permitida mais próxima entre `0..127`. Empates escolhem a
+altura inferior, evitando deriva melódica para cima. Aceita as mesmas raízes e
+escalas `major` e `minor` usadas pelo gerador e é idempotente: reaplicar a mesma
+tonalidade não muda novamente o clip.
+
+Status da integração Live para `constrain_to_scale`: **PENDENTE DE VALIDAÇÃO
+MANUAL**. A lógica de domínio, o preflight e a orquestração MCP são cobertos
+automaticamente; a escrita no piano roll do Live deve ser conferida antes de
+registrar validação manual.
+
 Humanize determinístico:
 
 ```json
