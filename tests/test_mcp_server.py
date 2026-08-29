@@ -97,6 +97,7 @@ def test_real_mcp_client_receives_structured_payload_v1():
     assert "generate_and_insert_melody" in tool_names
     assert "transform_ableton_midi_clip" in tool_names
     assert "analyze_ableton_midi_clip" in tool_names
+    assert "generate_contextual_melody_from_ableton_clip" in tool_names
     tool = next(tool for tool in tools.tools if tool.name == "generate_melody")
     assert tool.output_schema is not None
     assert "time_signature" in tool.output_schema["required"]

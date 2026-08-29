@@ -59,6 +59,14 @@ deliberadamente apresentado como compatibilidade: clips curtos e escalas
 relativas podem ter evidência idêntica, portanto o motor não inventa uma
 tonalidade única quando os dados não permitem distingui-la.
 
+`generate_contextual_plan` cria uma nova melodia monofônica determinística a
+partir de um `EditableMidiClip`. A tonalidade continua sendo uma decisão
+explícita do chamador; do clip de referência vêm a densidade de notas, o
+registro, a duração média e os limites de velocity. A saída usa grade de
+colcheias, evita sobreposição e limita a densidade ao máximo possível nessa
+grade. Se a tonalidade escolhida não tiver nenhuma nota dentro da tessitura do
+source, usa-se a altura permitida mais próxima, com desempate para baixo.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.
@@ -295,6 +303,13 @@ replace copy com o fingerprint da cópia
 snapshot e retorna seu fingerprint junto ao perfil musical produzido no domínio.
 A operação é somente leitura e não cria, duplica ou substitui clips. O
 fingerprint permite relacionar a análise ao estado exato observado no Live.
+
+`generate_contextual_melody_from_ableton_clip` recebe o source, BPM, tonalidade,
+número de compassos e seed. Ela lê o clip, chama o gerador contextual puro e
+retorna o `Integration Payload v1` junto ao fingerprint analisado. A operação é
+somente leitura: não cria nem substitui clips no Live. O chamador escolhe
+explicitamente `root_note` e `scale`, podendo usar os candidatos retornados pela
+análise sem transformar uma compatibilidade ambígua em decisão automática.
 
 O `clip_fingerprint` é um SHA-256 de JSON canônico formado pelo comprimento do clip e pelas notas ordenadas, com floats normalizados a nove casas decimais. Toda substituição exige o fingerprint obtido na leitura. Se o conteúdo tiver mudado no Live desde então, o bridge recusa a operação com `CLIP_CHANGED`; o cliente deve ler novamente antes de editar. Requests inválidos são validados integralmente antes da remoção das notas existentes, e notas além do comprimento atual falham com `NOTE_OUTSIDE_CLIP`. O comprimento nunca é alterado implicitamente.
 

@@ -9,6 +9,7 @@ from midi_generator.mcp.server import (
     analyze_ableton_midi_clip,
     duplicate_ableton_midi_clip,
     generate_and_insert_melody,
+    generate_contextual_melody_from_ableton_clip,
     generate_melody,
     get_ableton_midi_clip,
     get_ableton_session,
@@ -266,6 +267,37 @@ def test_mcp_client_receives_structured_clip_analysis(monkeypatch):
         "tonic_note_count": 1,
         "coverage": 1.0,
     }
+
+
+def test_mcp_client_generates_contextual_melody_without_mutating_live(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "generate_contextual_melody_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "bpm": 120,
+                    "root_note": "C",
+                    "scale": "major",
+                    "bars": 2,
+                    "seed": 42,
+                },
+            )
+
+    result = asyncio.run(call_tool())
+
+    assert result.is_error is False
+    assert fake.reads == [(0, 0)]
+    assert not hasattr(fake, "replaced")
+    assert result.structured_content["source_clip_fingerprint"] == "source"
+    composition = result.structured_content["composition"]
+    assert composition["metadata"]["generation_mode"] == "contextual"
+    assert composition["report"]["note_count"] == 2
+    assert {note["pitch"] for note in composition["notes"]} == {60}
 
 
 def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch):
