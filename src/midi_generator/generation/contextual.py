@@ -55,19 +55,19 @@ def generate_contextual_plan(
     pitches = _contextual_pitches(
         request.root_note, request.scale, lowest_pitch, highest_pitch
     )
-    minimum_velocity = min(note.velocity for note in sounding)
-    maximum_velocity = max(note.velocity for note in sounding)
+    pitch_groups = _weighted_pitch_groups(pitches, sounding)
+    velocities = tuple(note.velocity for note in sounding)
 
     notes = tuple(
         NoteEvent(
-            pitch=rng.choice(pitches),
+            pitch=_choose_contextual_pitch(rng, pitch_groups),
             start=start,
             duration=min(
                 mean_duration,
                 (starts[index + 1] if index + 1 < len(starts) else total_ticks)
                 - start,
             ),
-            velocity=rng.randint(minimum_velocity, maximum_velocity),
+            velocity=rng.choice(velocities),
         )
         for index, start in enumerate(starts)
     )
@@ -93,6 +93,8 @@ def generate_contextual_plan(
             "reference_lowest_pitch": lowest_pitch,
             "reference_highest_pitch": highest_pitch,
             "target_note_count": target_note_count,
+            "pitch_sampling": "reference_pitch_class_distribution",
+            "velocity_sampling": "reference_values",
         },
     )
     validate_plan(plan)
@@ -134,6 +136,38 @@ def _contextual_pitches(
     center_sum = lowest_pitch + highest_pitch
     nearest = min(allowed, key=lambda pitch: (abs(2 * pitch - center_sum), pitch))
     return (nearest,)
+
+
+def _weighted_pitch_groups(
+    pitches: tuple[int, ...], sounding: tuple[NoteEvent, ...]
+) -> tuple[tuple[tuple[int, ...], int], ...]:
+    histogram = [0] * 12
+    for note in sounding:
+        histogram[note.pitch % 12] += 1
+
+    groups = tuple(
+        (
+            tuple(pitch for pitch in pitches if pitch % 12 == pitch_class),
+            histogram[pitch_class],
+        )
+        for pitch_class in range(12)
+        if histogram[pitch_class]
+        and any(pitch % 12 == pitch_class for pitch in pitches)
+    )
+    if groups:
+        return groups
+    return tuple(((pitch,), 1) for pitch in pitches)
+
+
+def _choose_contextual_pitch(
+    rng: random.Random, groups: tuple[tuple[tuple[int, ...], int], ...]
+) -> int:
+    selection = rng.randrange(sum(weight for _, weight in groups))
+    for pitches, weight in groups:
+        if selection < weight:
+            return rng.choice(pitches)
+        selection -= weight
+    raise AssertionError("Weighted pitch selection exhausted its groups.")
 
 
 def _round_half_up(numerator: int, denominator: int) -> int:

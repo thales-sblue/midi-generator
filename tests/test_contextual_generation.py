@@ -52,6 +52,48 @@ def test_contextual_generation_is_reproducible_and_seed_sensitive():
     assert first != changed
 
 
+def test_contextual_generation_samples_reference_pitch_classes_and_velocities():
+    reference = EditableMidiClip(
+        length_ticks=1920,
+        notes=(
+            NoteEvent(60, 0, 240, 42),
+            NoteEvent(72, 240, 240, 42),
+            NoteEvent(60, 480, 240, 42),
+            NoteEvent(64, 720, 240, 96),
+            NoteEvent(67, 960, 240, 127, mute=True),
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 4, 4), reference
+    )
+
+    assert {note.pitch % 12 for note in plan.notes} <= {0, 4}
+    assert sum(note.pitch % 12 == 0 for note in plan.notes) == 15
+    assert {note.velocity for note in plan.notes} <= {42, 96}
+    assert plan.metadata["pitch_sampling"] == (
+        "reference_pitch_class_distribution"
+    )
+    assert plan.metadata["velocity_sampling"] == "reference_values"
+
+
+def test_contextual_generation_falls_back_when_scale_has_no_reference_pitch_class():
+    reference = EditableMidiClip(
+        length_ticks=960,
+        notes=(
+            NoteEvent(61, 0, 240, 50),
+            NoteEvent(63, 240, 240, 90),
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 1, 3), reference
+    )
+
+    assert all(note.pitch % 12 in {0, 2, 4, 5, 7, 9, 11} for note in plan.notes)
+    assert {note.velocity for note in plan.notes} <= {50, 90}
+
+
 def test_contextual_generation_uses_nearest_scale_pitch_for_foreign_register():
     reference = EditableMidiClip(
         length_ticks=480,
