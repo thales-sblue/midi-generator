@@ -61,15 +61,18 @@ tonalidade única quando os dados não permitem distingui-la.
 
 `generate_contextual_plan` cria uma nova melodia monofônica determinística a
 partir de um `EditableMidiClip`. A tonalidade continua sendo uma decisão
-explícita do chamador; do clip de referência vêm a densidade de notas, o
-registro, a duração média, a distribuição de classes de altura e os valores
-reais de velocity. Classes de altura do source incompatíveis com a tonalidade
+explícita do chamador; do clip de referência vêm a densidade e a distribuição
+de fase dos onsets, o registro, a duração média, a distribuição de classes de
+altura e os valores reais de velocity. Acordes contam como um único ataque, por
+isso a polifonia do source não infla a densidade de uma saída monofônica. Os
+onsets são projetados na grade de colcheias pela posição dentro do compasso e
+amostrados sem repetição. Classes de altura incompatíveis com a tonalidade
 escolhida são ignoradas; se nenhuma for compatível, o gerador usa todas as
 alturas permitidas no registro como fallback uniforme. Notas mutadas não
-influenciam nenhum desses atributos. A saída usa grade de colcheias, evita
-sobreposição e limita a densidade ao máximo possível nessa grade. Se a
-tonalidade escolhida não tiver nenhuma nota dentro da tessitura do source,
-usa-se a altura permitida mais próxima, com desempate para baixo.
+influenciam nenhum desses atributos. A saída evita sobreposição e limita a
+densidade ao máximo possível na grade. Se a tonalidade escolhida não tiver
+nenhuma nota dentro da tessitura do source, usa-se a altura permitida mais
+próxima, com desempate para baixo.
 
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 

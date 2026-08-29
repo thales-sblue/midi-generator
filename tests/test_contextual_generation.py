@@ -35,6 +35,10 @@ def test_contextual_generation_inherits_density_register_and_dynamics():
     )
     assert plan.metadata["generation_mode"] == "contextual"
     assert plan.metadata["reference_note_count"] == 4
+    assert plan.metadata["reference_onset_count"] == 4
+    assert plan.metadata["rhythm_sampling"] == (
+        "reference_onset_phase_distribution"
+    )
     assert reference == reference_clip()
 
 
@@ -69,7 +73,7 @@ def test_contextual_generation_samples_reference_pitch_classes_and_velocities():
     )
 
     assert {note.pitch % 12 for note in plan.notes} <= {0, 4}
-    assert sum(note.pitch % 12 == 0 for note in plan.notes) == 15
+    assert sum(note.pitch % 12 == 0 for note in plan.notes) == 12
     assert {note.velocity for note in plan.notes} <= {42, 96}
     assert plan.metadata["pitch_sampling"] == (
         "reference_pitch_class_distribution"
@@ -107,7 +111,7 @@ def test_contextual_generation_uses_nearest_scale_pitch_for_foreign_register():
     assert {note.pitch for note in plan.notes} == {65}
 
 
-def test_contextual_generation_reports_density_cap_for_polyphonic_source():
+def test_contextual_generation_uses_onsets_so_chords_do_not_inflate_density():
     reference = EditableMidiClip(
         length_ticks=480,
         notes=tuple(
@@ -119,8 +123,44 @@ def test_contextual_generation_reports_density_cap_for_polyphonic_source():
         MelodyRequest(120, "C", "major", 1, 7), reference
     )
 
+    assert len(plan.notes) == 4
+    assert plan.metadata["reference_note_count"] == 4
+    assert plan.metadata["reference_onset_count"] == 1
+    assert plan.report.warnings == ()
+
+
+def test_contextual_generation_inherits_onset_phases_on_eighth_note_grid():
+    reference = EditableMidiClip(
+        length_ticks=1920,
+        notes=(
+            NoteEvent(60, 0, 120, 90),
+            NoteEvent(62, 720, 120, 90),
+            NoteEvent(64, 960, 120, 90),
+            NoteEvent(65, 1680, 120, 90),
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 2, 11), reference
+    )
+
     assert len(plan.notes) == 8
-    assert plan.metadata["target_note_count"] == 8
+    assert {note.start % 1920 for note in plan.notes} == {0, 720, 960, 1680}
+
+
+def test_contextual_generation_caps_excessive_onset_density():
+    reference = EditableMidiClip(
+        length_ticks=480,
+        notes=tuple(
+            NoteEvent(60, start, 1, 90) for start in range(0, 480, 30)
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 1, 7), reference
+    )
+
+    assert len(plan.notes) == 8
     assert plan.report.warnings == (
         "Contextual density exceeded the monophonic eighth-note grid and was capped.",
     )

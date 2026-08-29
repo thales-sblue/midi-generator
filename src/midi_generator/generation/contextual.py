@@ -29,11 +29,15 @@ def generate_contextual_plan(
     sounding = tuple(note for note in reference.notes if not note.mute)
     if not sounding:
         raise ValueError("Reference clip must contain at least one sounding note.")
+    reference_onsets = tuple(sorted({note.start for note in sounding}))
 
     total_ticks = request.bars * BEATS_PER_BAR * TICKS_PER_BEAT
     step_count = total_ticks // STEP_TICKS
     requested_note_count = _target_note_count(
-        len(sounding), reference.length_ticks, reference.ticks_per_beat, request.bars
+        len(reference_onsets),
+        reference.length_ticks,
+        reference.ticks_per_beat,
+        request.bars,
     )
     target_note_count = min(max(requested_note_count, 1), step_count)
     warnings = ()
@@ -45,7 +49,12 @@ def generate_contextual_plan(
         )
 
     rng = random.Random(request.seed)
-    selected_steps = sorted(rng.sample(range(step_count), target_note_count))
+    phase_weights = _onset_phase_weights(
+        reference_onsets, reference.ticks_per_beat
+    )
+    selected_steps = _sample_contextual_steps(
+        rng, step_count, target_note_count, phase_weights
+    )
     starts = tuple(step * STEP_TICKS for step in selected_steps)
     mean_duration = _round_half_up(
         sum(note.duration for note in sounding), len(sounding)
@@ -90,9 +99,11 @@ def generate_contextual_plan(
             "ticks_per_beat": TICKS_PER_BEAT,
             "generation_mode": "contextual",
             "reference_note_count": len(sounding),
+            "reference_onset_count": len(reference_onsets),
             "reference_lowest_pitch": lowest_pitch,
             "reference_highest_pitch": highest_pitch,
             "target_note_count": target_note_count,
+            "rhythm_sampling": "reference_onset_phase_distribution",
             "pitch_sampling": "reference_pitch_class_distribution",
             "velocity_sampling": "reference_values",
         },
@@ -102,18 +113,59 @@ def generate_contextual_plan(
 
 
 def _target_note_count(
-    reference_note_count: int,
+    reference_onset_count: int,
     reference_length_ticks: int,
     reference_ticks_per_beat: int,
     target_bars: int,
 ) -> int:
     numerator = (
-        reference_note_count
+        reference_onset_count
         * reference_ticks_per_beat
         * target_bars
         * BEATS_PER_BAR
     )
     return _round_half_up(numerator, reference_length_ticks)
+
+
+def _onset_phase_weights(
+    onsets: tuple[int, ...], ticks_per_beat: int
+) -> tuple[int, ...]:
+    steps_per_bar = BEATS_PER_BAR * TICKS_PER_BEAT // STEP_TICKS
+    bar_ticks = BEATS_PER_BAR * ticks_per_beat
+    weights = [0] * steps_per_bar
+    for onset in onsets:
+        phase = _round_half_up(
+            (onset % bar_ticks) * steps_per_bar, bar_ticks
+        ) % steps_per_bar
+        weights[phase] += 1
+    return tuple(weights)
+
+
+def _sample_contextual_steps(
+    rng: random.Random,
+    step_count: int,
+    target_note_count: int,
+    phase_weights: tuple[int, ...],
+) -> list[int]:
+    remaining = list(range(step_count))
+    selected = []
+    for _ in range(target_note_count):
+        weights = tuple(
+            phase_weights[step % len(phase_weights)] for step in remaining
+        )
+        total_weight = sum(weights)
+        if total_weight:
+            selection = rng.randrange(total_weight)
+            selected_index = 0
+            for index, weight in enumerate(weights):
+                if selection < weight:
+                    selected_index = index
+                    break
+                selection -= weight
+        else:
+            selected_index = rng.randrange(len(remaining))
+        selected.append(remaining.pop(selected_index))
+    return sorted(selected)
 
 
 def _contextual_pitches(
