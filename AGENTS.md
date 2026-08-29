@@ -56,6 +56,11 @@ Ao receber uma instrução curta para prosseguir:
    utilizável do assistente musical integrado ao Ableton. Trate os valores como
    estimativas de capacidade, não como medições exatas, e mantenha consistente o
    critério de conclusão entre ciclos.
+8. Depois que a suíte estiver validada, a revisão concluída e o commit criado com
+   sucesso, publique a branch atual no `origin`. No primeiro envio da branch,
+   configure seu upstream; nos ciclos seguintes, confirme que o push terminou
+   sem erro antes de declarar o trabalho concluído. Nunca faça push de uma suíte
+   com falhas ou de um worktree com alterações ainda não revisadas.
 
 ## Fronteiras de validação
 
