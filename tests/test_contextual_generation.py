@@ -39,6 +39,9 @@ def test_contextual_generation_inherits_density_register_and_dynamics():
     assert plan.metadata["rhythm_sampling"] == (
         "reference_onset_phase_distribution"
     )
+    assert plan.metadata["motion_sampling"] == (
+        "reference_top_line_distribution"
+    )
     assert reference == reference_clip()
 
 
@@ -73,7 +76,7 @@ def test_contextual_generation_samples_reference_pitch_classes_and_velocities():
     )
 
     assert {note.pitch % 12 for note in plan.notes} <= {0, 4}
-    assert sum(note.pitch % 12 == 0 for note in plan.notes) == 12
+    assert sum(note.pitch % 12 == 0 for note in plan.notes) == 15
     assert {note.velocity for note in plan.notes} <= {42, 96}
     assert plan.metadata["pitch_sampling"] == (
         "reference_pitch_class_distribution"
@@ -96,6 +99,36 @@ def test_contextual_generation_falls_back_when_scale_has_no_reference_pitch_clas
 
     assert all(note.pitch % 12 in {0, 2, 4, 5, 7, 9, 11} for note in plan.notes)
     assert {note.velocity for note in plan.notes} <= {50, 90}
+
+
+@pytest.mark.parametrize(
+    ("source_pitches", "direction"),
+    [
+        ((60, 62, 64, 65), 1),
+        ((65, 64, 62, 60), -1),
+    ],
+)
+def test_contextual_generation_inherits_top_line_motion(
+    source_pitches, direction
+):
+    reference = EditableMidiClip(
+        length_ticks=1920,
+        notes=tuple(
+            NoteEvent(pitch, index * 480, 240, 90)
+            for index, pitch in enumerate(source_pitches)
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 2, 12), reference
+    )
+
+    intervals = tuple(
+        following.pitch - current.pitch
+        for current, following in zip(plan.notes, plan.notes[1:])
+    )
+    assert any(interval * direction > 0 for interval in intervals)
+    assert all(interval * direction >= 0 for interval in intervals)
 
 
 def test_contextual_generation_uses_nearest_scale_pitch_for_foreign_register():

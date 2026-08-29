@@ -70,7 +70,10 @@ de fase dos onsets, o registro, a duração média, a distribuição de classes 
 altura e os valores reais de velocity. Acordes contam como um único ataque, por
 isso a polifonia do source não infla a densidade de uma saída monofônica. Os
 onsets são projetados na grade de colcheias pela posição dentro do compasso e
-amostrados sem repetição. Classes de altura incompatíveis com a tonalidade
+amostrados sem repetição. As proporções de movimentos ascendentes, descendentes
+e repetidos da voz superior também orientam cada nova altura; quando a borda da
+tessitura impede o movimento sorteado, a nota atual é repetida em vez de inverter
+silenciosamente a direção. Classes de altura incompatíveis com a tonalidade
 escolhida são ignoradas; se nenhuma for compatível, o gerador usa todas as
 alturas permitidas no registro como fallback uniforme. Notas mutadas não
 influenciam nenhum desses atributos. A saída evita sobreposição e limita a

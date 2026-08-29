@@ -53,7 +53,7 @@ def analyze_clip(clip: EditableMidiClip) -> ClipProfile:
     lowest_pitch = min(pitches) if pitches else None
     highest_pitch = max(pitches) if pitches else None
     sounding_count = len(sounding)
-    melodic_intervals = _top_line_intervals(sounding)
+    melodic_intervals = top_line_intervals(sounding)
     melodic_interval_count = len(melodic_intervals)
     return ClipProfile(
         clip_length_ticks=clip.length_ticks,
@@ -124,9 +124,12 @@ def _max_polyphony(notes: tuple[NoteEvent, ...]) -> int:
     return maximum
 
 
-def _top_line_intervals(notes: tuple[NoteEvent, ...]) -> tuple[int, ...]:
+def top_line_intervals(notes: tuple[NoteEvent, ...]) -> tuple[int, ...]:
+    """Return intervals between the highest sounding pitches of successive onsets."""
     highest_pitch_by_onset: dict[int, int] = {}
     for note in notes:
+        if note.mute:
+            continue
         highest_pitch_by_onset[note.start] = max(
             note.pitch, highest_pitch_by_onset.get(note.start, note.pitch)
         )

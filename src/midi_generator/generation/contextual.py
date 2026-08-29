@@ -2,6 +2,7 @@
 
 import random
 
+from midi_generator.analysis import top_line_intervals
 from midi_generator.domain import (
     CompositionPlan,
     GenerationReport,
@@ -65,24 +66,39 @@ def generate_contextual_plan(
         request.root_note, request.scale, lowest_pitch, highest_pitch
     )
     pitch_groups = _weighted_pitch_groups(pitches, sounding)
+    motion_weights = _melodic_motion_weights(top_line_intervals(sounding))
     velocities = tuple(note.velocity for note in sounding)
 
-    notes = tuple(
-        NoteEvent(
-            pitch=_choose_contextual_pitch(rng, pitch_groups),
-            start=start,
-            duration=min(
-                mean_duration,
-                (starts[index + 1] if index + 1 < len(starts) else total_ticks)
-                - start,
-            ),
-            velocity=rng.choice(velocities),
+    notes = []
+    for index, start in enumerate(starts):
+        previous_pitch = notes[-1].pitch if notes else None
+        motion = (
+            _choose_melodic_motion(rng, motion_weights)
+            if previous_pitch is not None and motion_weights
+            else None
         )
-        for index, start in enumerate(starts)
-    )
+        notes.append(
+            NoteEvent(
+                pitch=_choose_contextual_pitch(
+                    rng, pitch_groups, previous_pitch, motion
+                ),
+                start=start,
+                duration=min(
+                    mean_duration,
+                    (
+                        starts[index + 1]
+                        if index + 1 < len(starts)
+                        else total_ticks
+                    )
+                    - start,
+                ),
+                velocity=rng.choice(velocities),
+            )
+        )
+    note_events = tuple(notes)
     report = GenerationReport(
-        note_count=len(notes),
-        pause_count=step_count - len(notes),
+        note_count=len(note_events),
+        pause_count=step_count - len(note_events),
         duration_ticks=total_ticks,
         scale=request.scale.lower(),
         seed=request.seed,
@@ -91,7 +107,7 @@ def generate_contextual_plan(
     plan = CompositionPlan(
         request=request,
         seed=request.seed,
-        notes=notes,
+        notes=note_events,
         total_duration_ticks=total_ticks,
         report=report,
         metadata={
@@ -105,6 +121,7 @@ def generate_contextual_plan(
             "target_note_count": target_note_count,
             "rhythm_sampling": "reference_onset_phase_distribution",
             "pitch_sampling": "reference_pitch_class_distribution",
+            "motion_sampling": "reference_top_line_distribution",
             "velocity_sampling": "reference_values",
         },
     )
@@ -212,14 +229,73 @@ def _weighted_pitch_groups(
 
 
 def _choose_contextual_pitch(
-    rng: random.Random, groups: tuple[tuple[tuple[int, ...], int], ...]
+    rng: random.Random,
+    groups: tuple[tuple[tuple[int, ...], int], ...],
+    previous_pitch: int | None = None,
+    motion: int | None = None,
 ) -> int:
-    selection = rng.randrange(sum(weight for _, weight in groups))
-    for pitches, weight in groups:
+    eligible_groups = _eligible_pitch_groups(groups, previous_pitch, motion)
+    selection = rng.randrange(sum(weight for _, weight in eligible_groups))
+    for pitches, weight in eligible_groups:
         if selection < weight:
             return rng.choice(pitches)
         selection -= weight
     raise AssertionError("Weighted pitch selection exhausted its groups.")
+
+
+def _eligible_pitch_groups(
+    groups: tuple[tuple[tuple[int, ...], int], ...],
+    previous_pitch: int | None,
+    motion: int | None,
+) -> tuple[tuple[tuple[int, ...], int], ...]:
+    if previous_pitch is None or motion is None:
+        return groups
+    eligible = tuple(
+        (
+            tuple(
+                pitch
+                for pitch in pitches
+                if (pitch > previous_pitch and motion > 0)
+                or (pitch < previous_pitch and motion < 0)
+                or (pitch == previous_pitch and motion == 0)
+            ),
+            weight,
+        )
+        for pitches, weight in groups
+    )
+    eligible = tuple(group for group in eligible if group[0])
+    if eligible:
+        return eligible
+    return tuple(
+        ((previous_pitch,), weight)
+        for pitches, weight in groups
+        if previous_pitch in pitches
+    )
+
+
+def _melodic_motion_weights(
+    intervals: tuple[int, ...]
+) -> tuple[tuple[int, int], ...]:
+    return tuple(
+        (motion, count)
+        for motion, count in (
+            (-1, sum(interval < 0 for interval in intervals)),
+            (0, sum(interval == 0 for interval in intervals)),
+            (1, sum(interval > 0 for interval in intervals)),
+        )
+        if count
+    )
+
+
+def _choose_melodic_motion(
+    rng: random.Random, weights: tuple[tuple[int, int], ...]
+) -> int:
+    selection = rng.randrange(sum(weight for _, weight in weights))
+    for motion, weight in weights:
+        if selection < weight:
+            return motion
+        selection -= weight
+    raise AssertionError("Weighted melodic motion selection exhausted its groups.")
 
 
 def _round_half_up(numerator: int, denominator: int) -> int:
