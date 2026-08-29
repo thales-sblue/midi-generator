@@ -6,6 +6,7 @@ from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_plan
 from midi_generator.integration import composition_to_payload
 from midi_generator.mcp.server import (
+    analyze_ableton_midi_clip,
     duplicate_ableton_midi_clip,
     generate_and_insert_melody,
     generate_melody,
@@ -209,6 +210,53 @@ def test_transform_tool_returns_structured_result_and_only_edits_copy(monkeypatc
     assert fake.replaced[3][0]["pitch"] == 72
     assert result["source_clip_fingerprint"] == "source"
     assert result["target_clip_fingerprint"] == "result"
+
+
+def test_analyze_clip_tool_reads_without_mutating_ableton(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = analyze_ableton_midi_clip(0, 0)
+
+    assert fake.reads == [(0, 0)]
+    assert fake.created is None
+    assert not hasattr(fake, "replaced")
+    assert result["analyzed"] is True
+    assert result["clip_fingerprint"] == "source"
+    assert result["profile"]["sounding_note_count"] == 1
+    assert result["profile"]["pitch_class_histogram"][0] == 1
+
+
+def test_mcp_client_receives_structured_clip_analysis(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "analyze_ableton_midi_clip",
+                {"track_index": 0, "scene_index": 0},
+            )
+
+    result = asyncio.run(call_tool())
+
+    assert result.is_error is False
+    assert result.structured_content["analyzed"] is True
+    assert result.structured_content["profile"]["max_polyphony"] == 1
+    assert result.structured_content["profile"]["pitch_class_histogram"] == [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ]
 
 
 def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch):

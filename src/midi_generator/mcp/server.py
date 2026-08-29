@@ -6,10 +6,14 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from midi_generator.ableton import AbletonClient, AbletonError
+from midi_generator.analysis import analyze_clip
 from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_plan
 from midi_generator.integration import (
+    ClipProfilePayload,
     IntegrationPayload,
+    ableton_snapshot_to_clip,
+    clip_profile_to_payload,
     composition_to_payload,
     validate_payload_v1,
 )
@@ -32,6 +36,14 @@ class InsertedClipResult(TypedDict):
     clip_length_beats: float
     note_count: int
     schema_version: int
+
+
+class AnalyzedClipResult(TypedDict):
+    analyzed: bool
+    track_index: int
+    scene_index: int
+    clip_fingerprint: str
+    profile: ClipProfilePayload
 
 
 @mcp.tool()
@@ -63,6 +75,30 @@ def get_ableton_midi_clip(track_index: int, scene_index: int) -> dict[str, Any]:
     """Read the editable MIDI note content and fingerprint of an Ableton clip."""
     try:
         return AbletonClient().get_midi_clip(track_index, scene_index)
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def analyze_ableton_midi_clip(
+    track_index: int, scene_index: int
+) -> AnalyzedClipResult:
+    """Read an Ableton MIDI clip and return its objective musical profile."""
+    try:
+        snapshot = AbletonClient().get_midi_clip(track_index, scene_index)
+        fingerprint = snapshot.get("clip_fingerprint")
+        if not isinstance(fingerprint, str) or not fingerprint:
+            raise ValueError(
+                "Ableton clip snapshot must include a clip_fingerprint."
+            )
+        profile = analyze_clip(ableton_snapshot_to_clip(snapshot))
+        return AnalyzedClipResult(
+            analyzed=True,
+            track_index=track_index,
+            scene_index=scene_index,
+            clip_fingerprint=fingerprint,
+            profile=clip_profile_to_payload(profile),
+        )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error
 

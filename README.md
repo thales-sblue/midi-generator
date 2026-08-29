@@ -45,6 +45,13 @@ vazios permanecem vazios; quando todos os eventos compartilham um único onset,
 usa-se `start_velocity` em todas as notas. A mesma operação está disponível no
 fluxo não destrutivo do Ableton descrito abaixo.
 
+A primeira capacidade de análise musical é `analyze_clip`. Ela produz um perfil
+objetivo e determinístico do conteúdo audível: notas totais, ativas e mutadas,
+onsets distintos, tessitura, velocity e duração médias, densidade por beat,
+polifonia máxima e histograma das 12 classes de altura. Notas mutadas são
+contabilizadas, mas não influenciam as métricas musicais. A análise é pura,
+imutável e reutiliza `EditableMidiClip`, sem Live API, MCP ou Mido.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.
@@ -276,6 +283,11 @@ replace copy com o fingerprint da cópia
 ```
 
 `get_ableton_midi_clip` retorna nome, comprimento em beats, estado de loop e as propriedades mínimas de cada nota (`pitch`, `start_time`, `duration`, `velocity` e `mute`). As notas são ordenadas por posição, pitch e duração.
+
+`analyze_ableton_midi_clip` recebe `track_index` e `scene_index`, lê o mesmo
+snapshot e retorna seu fingerprint junto ao perfil musical produzido no domínio.
+A operação é somente leitura e não cria, duplica ou substitui clips. O
+fingerprint permite relacionar a análise ao estado exato observado no Live.
 
 O `clip_fingerprint` é um SHA-256 de JSON canônico formado pelo comprimento do clip e pelas notas ordenadas, com floats normalizados a nove casas decimais. Toda substituição exige o fingerprint obtido na leitura. Se o conteúdo tiver mudado no Live desde então, o bridge recusa a operação com `CLIP_CHANGED`; o cliente deve ler novamente antes de editar. Requests inválidos são validados integralmente antes da remoção das notas existentes, e notas além do comprimento atual falham com `NOTE_OUTSIDE_CLIP`. O comprimento nunca é alterado implicitamente.
 
