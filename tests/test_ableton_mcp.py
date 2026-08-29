@@ -320,6 +320,25 @@ def test_transform_tool_exposes_non_destructive_diatonic_harmony(monkeypatch):
     assert result["transform"] == "harmonize_diatonic"
 
 
+def test_transform_tool_exposes_non_destructive_velocity_ramp(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(
+        0,
+        0,
+        0,
+        1,
+        "velocity_ramp",
+        start_velocity=40,
+        end_velocity=100,
+    )
+
+    assert fake.replaced[3][0]["velocity"] == 40
+    assert fake.duplicated == (0, 0, 0, 1, "source")
+    assert result["transform"] == "velocity_ramp"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

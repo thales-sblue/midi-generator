@@ -230,6 +230,72 @@ def test_diatonic_harmony_rejects_foreign_pitch_before_duplicate():
     assert client.calls == [("get", 0, 0)]
 
 
+def test_velocity_ramp_is_preflighted_and_applied_only_to_copy():
+    source = snapshot(0, 0, "source")
+    source["notes"].append(
+        {
+            "pitch": 64,
+            "start_time": 2.5,
+            "duration": 0.5,
+            "velocity": 70,
+            "mute": False,
+        }
+    )
+    copy = snapshot(0, 1, "copy")
+    copy["notes"].append(dict(source["notes"][1]))
+    client = RecordingClient(source=source, copy=copy)
+
+    result = transform_midi_clip_copy(
+        client,
+        0,
+        0,
+        0,
+        1,
+        "velocity_ramp",
+        start_velocity=40,
+        end_velocity=100,
+    )
+
+    assert [call[0] for call in client.calls] == [
+        "get",
+        "duplicate",
+        "get",
+        "replace",
+    ]
+    assert [note["velocity"] for note in client.calls[-1][4]] == [40, 100]
+    assert [note["velocity"] for note in client.source["notes"]] == [90, 70]
+    assert result["transform"] == "velocity_ramp"
+
+
+@pytest.mark.parametrize(
+    ("start_velocity", "end_velocity", "message"),
+    [
+        (None, 100, "velocity_ramp requires"),
+        (0, 100, "start_velocity must be"),
+        (40, 128, "end_velocity must be"),
+        (True, 100, "start_velocity must be"),
+    ],
+)
+def test_invalid_velocity_ramp_parameters_fail_before_reading_source(
+    start_velocity, end_velocity, message
+):
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match=message):
+        transform_midi_clip_copy(
+            client,
+            0,
+            0,
+            0,
+            1,
+            "velocity_ramp",
+            start_velocity=start_velocity,
+            end_velocity=end_velocity,
+        )
+
+    assert client.calls == []
+
+
 def test_missing_diatonic_harmony_parameters_fail_before_reading_source():
     client = RecordingClient()
 

@@ -127,6 +127,8 @@ def transform_ableton_midi_clip(
     root_note: str | None = None,
     scale: str | None = None,
     steps: int | None = None,
+    start_velocity: int | None = None,
+    end_velocity: int | None = None,
 ) -> TransformedClipResult:
     """Apply a deterministic transform to a duplicate in an empty clip slot."""
     try:
@@ -147,6 +149,8 @@ def transform_ableton_midi_clip(
             root_note=root_note,
             scale=scale,
             steps=steps,
+            start_velocity=start_velocity,
+            end_velocity=end_velocity,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

@@ -19,6 +19,7 @@ from midi_generator.transformations import (
     staccato,
     transpose,
     transpose_diatonic,
+    velocity_ramp,
 )
 
 TRANSFORMS = {
@@ -32,6 +33,7 @@ TRANSFORMS = {
     "constrain_to_scale",
     "transpose_diatonic",
     "harmonize_diatonic",
+    "velocity_ramp",
 }
 
 
@@ -65,6 +67,8 @@ def transform_midi_clip_copy(
     root_note: str | None = None,
     scale: str | None = None,
     steps: int | None = None,
+    start_velocity: int | None = None,
+    end_velocity: int | None = None,
 ) -> TransformedClipResult:
     """Read, preflight, duplicate, transform and replace only the copied clip."""
     _validate_indices(
@@ -85,6 +89,8 @@ def transform_midi_clip_copy(
         root_note,
         scale,
         steps,
+        start_velocity,
+        end_velocity,
     )
 
     source_snapshot = client.get_midi_clip(source_track_index, source_scene_index)
@@ -123,6 +129,10 @@ def transform_midi_clip_copy(
 
 
 def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
+    if transform == "velocity_ramp":
+        return velocity_ramp(
+            clip, parameters["start_velocity"], parameters["end_velocity"]
+        )
     if transform == "harmonize_diatonic":
         return harmonize_diatonic(
             clip, parameters["steps"], parameters["root_note"], parameters["scale"]
@@ -165,12 +175,14 @@ def _validate_parameters(
     root_note: str | None,
     scale: str | None,
     steps: int | None,
+    start_velocity: int | None,
+    end_velocity: int | None,
 ) -> dict[str, Any]:
     if transform not in TRANSFORMS:
         raise ValueError(
             "transform must be 'transpose', 'invert', 'retrograde', 'legato', "
             "'staccato', 'constrain_to_scale', 'transpose_diatonic', "
-            "'harmonize_diatonic', 'quantize', or 'humanize'."
+            "'harmonize_diatonic', 'velocity_ramp', 'quantize', or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
@@ -203,6 +215,22 @@ def _validate_parameters(
         if steps is None or root_note is None or scale is None:
             raise ValueError("harmonize_diatonic requires steps, root_note and scale.")
         return {"steps": steps, "root_note": root_note, "scale": scale}
+    if transform == "velocity_ramp":
+        if start_velocity is None or end_velocity is None:
+            raise ValueError(
+                "velocity_ramp requires start_velocity and end_velocity."
+            )
+        for name, value in (
+            ("start_velocity", start_velocity),
+            ("end_velocity", end_velocity),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 1 <= value <= 127
+            ):
+                raise ValueError(f"{name} must be an integer between 1 and 127.")
+        return {"start_velocity": start_velocity, "end_velocity": end_velocity}
     if transform == "quantize":
         if grid is None:
             raise ValueError("quantize requires grid.")

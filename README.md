@@ -42,8 +42,8 @@ expressive_clip = velocity_ramp(clip, start_velocity=45, end_velocity=105)
 
 O arredondamento é inteiro, explícito e simétrico nas duas direções. Clips
 vazios permanecem vazios; quando todos os eventos compartilham um único onset,
-usa-se `start_velocity` em todas as notas. Nesta etapa a operação pertence ao
-domínio puro e ainda não é exposta como transformação do Ableton.
+usa-se `start_velocity` em todas as notas. A mesma operação está disponível no
+fluxo não destrutivo do Ableton descrito abaixo.
 
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
@@ -508,6 +508,26 @@ zero e resultados fora de `0..127` falham no preflight, antes da duplicação.
 Notas harmônicas que já existam com todas as mesmas propriedades não são
 duplicadas. Status da integração Live: **PENDENTE DE VALIDAÇÃO MANUAL**.
 
+Rampa expressiva de velocity:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "velocity_ramp",
+  "start_velocity": 40,
+  "end_velocity": 100
+}
+```
+
+`velocity_ramp` cria um crescendo ou diminuendo linear entre o primeiro e o
+último onset real. Notas do mesmo acorde recebem a mesma velocity; pitch,
+timing, duração, mute, canal e track são preservados. Os extremos devem ser
+inteiros entre `1..127` e são validados antes da duplicação. Status da integração
+Live: **PENDENTE DE VALIDAÇÃO MANUAL**.
+
 Humanize determinístico:
 
 ```json
@@ -671,7 +691,7 @@ As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonCli
 
 **VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das tools MCP de baixo nível.
 
-A suíte também cobre transpose positivo e negativo, inversão melódica por eixo, reflexão temporal e involução exata de invert e retrograde, articulações legato por grupos de onset e staccato por duração máxima, transposição e harmonia diatônicas, preservação da voz original na cópia harmonizada, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
+A suíte também cobre transpose positivo e negativo, inversão melódica por eixo, reflexão temporal e involução exata de invert e retrograde, articulações legato por grupos de onset e staccato por duração máxima, transposição e harmonia diatônicas, preservação da voz original na cópia harmonizada, rampas expressivas de velocity, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
 
 As transformações desta versão operam somente sobre MIDI clips da Session View. Não criam tracks, instrumentos ou devices e não controlam transporte, Arrangement View, automações, mixagem ou áudio.
 
