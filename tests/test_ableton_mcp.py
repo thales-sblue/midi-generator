@@ -226,6 +226,8 @@ def test_analyze_clip_tool_reads_without_mutating_ableton(monkeypatch):
     assert result["clip_fingerprint"] == "source"
     assert result["profile"]["sounding_note_count"] == 1
     assert result["profile"]["pitch_class_histogram"][0] == 1
+    assert result["profile"]["melodic_interval_count"] == 0
+    assert result["profile"]["ascending_motion_count"] == 0
     assert len(result["profile"]["scale_candidates"]) == 24
     assert result["profile"]["scale_candidates"][0]["coverage"] == 1.0
 
@@ -246,6 +248,10 @@ def test_mcp_client_receives_structured_clip_analysis(monkeypatch):
     assert result.is_error is False
     assert result.structured_content["analyzed"] is True
     assert result.structured_content["profile"]["max_polyphony"] == 1
+    assert result.structured_content["profile"]["melodic_interval_count"] == 0
+    assert result.structured_content["profile"][
+        "mean_absolute_interval_semitones"
+    ] is None
     assert result.structured_content["profile"]["pitch_class_histogram"] == [
         1,
         0,

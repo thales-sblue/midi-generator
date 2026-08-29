@@ -48,9 +48,13 @@ fluxo não destrutivo do Ableton descrito abaixo.
 A primeira capacidade de análise musical é `analyze_clip`. Ela produz um perfil
 objetivo e determinístico do conteúdo audível: notas totais, ativas e mutadas,
 onsets distintos, tessitura, velocity e duração médias, densidade por beat,
-polifonia máxima e histograma das 12 classes de altura. Notas mutadas são
-contabilizadas, mas não influenciam as métricas musicais. A análise é pura,
-imutável e reutiliza `EditableMidiClip`, sem Live API, MCP ou Mido.
+polifonia máxima, histograma das 12 classes de altura e movimento melódico.
+O movimento usa a nota audível mais aguda de cada onset como voz superior e
+mede quantos intervalos sobem, descem ou repetem, além do tamanho médio absoluto
+e do maior salto. Com menos de dois onsets, os tamanhos permanecem desconhecidos
+em vez de serem inventados como zero. Notas mutadas são contabilizadas, mas não
+influenciam as métricas musicais. A análise é pura, imutável e reutiliza
+`EditableMidiClip`, sem Live API, MCP ou Mido.
 
 O perfil também classifica as 24 escalas maior/menor por cobertura das notas
 audíveis e, em empate, pela quantidade de ocorrências da tônica. Cada candidato

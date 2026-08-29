@@ -32,6 +32,12 @@ def test_clip_profile_measures_sounding_musical_content():
     assert profile.note_density_per_beat == 0.75
     assert profile.onset_density_per_beat == 0.5
     assert profile.max_polyphony == 2
+    assert profile.melodic_interval_count == 1
+    assert profile.ascending_motion_count == 1
+    assert profile.descending_motion_count == 0
+    assert profile.repeated_motion_count == 0
+    assert profile.mean_absolute_interval_semitones == 3.0
+    assert profile.largest_interval_semitones == 3
     assert profile.pitch_class_histogram == (
         1,
         0,
@@ -62,8 +68,37 @@ def test_empty_clip_has_explicit_zero_and_unknown_measurements():
     assert profile.note_density_per_beat == 0.0
     assert profile.onset_density_per_beat == 0.0
     assert profile.max_polyphony == 0
+    assert profile.melodic_interval_count == 0
+    assert profile.ascending_motion_count == 0
+    assert profile.descending_motion_count == 0
+    assert profile.repeated_motion_count == 0
+    assert profile.mean_absolute_interval_semitones is None
+    assert profile.largest_interval_semitones is None
     assert profile.pitch_class_histogram == (0,) * 12
     assert profile.scale_candidates == ()
+
+
+def test_melodic_motion_uses_highest_sounding_pitch_at_each_onset():
+    clip = EditableMidiClip(
+        length_ticks=1200,
+        notes=(
+            NoteEvent(60, 0, 240, 90),
+            NoteEvent(67, 0, 240, 90),
+            NoteEvent(65, 240, 240, 90),
+            NoteEvent(65, 480, 240, 90),
+            NoteEvent(72, 720, 240, 90),
+            NoteEvent(84, 960, 240, 90, mute=True),
+        ),
+    )
+
+    profile = analyze_clip(clip)
+
+    assert profile.melodic_interval_count == 3
+    assert profile.ascending_motion_count == 1
+    assert profile.descending_motion_count == 1
+    assert profile.repeated_motion_count == 1
+    assert profile.mean_absolute_interval_semitones == 3.0
+    assert profile.largest_interval_semitones == 7
 
 
 def test_all_muted_notes_are_counted_but_excluded_from_musical_metrics():

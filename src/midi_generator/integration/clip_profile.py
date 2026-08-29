@@ -28,6 +28,12 @@ class ClipProfilePayload(TypedDict):
     note_density_per_beat: float
     onset_density_per_beat: float
     max_polyphony: int
+    melodic_interval_count: int
+    ascending_motion_count: int
+    descending_motion_count: int
+    repeated_motion_count: int
+    mean_absolute_interval_semitones: float | None
+    largest_interval_semitones: int | None
     pitch_class_histogram: list[int]
     scale_candidates: list[ScaleCandidatePayload]
 
@@ -49,6 +55,14 @@ def clip_profile_to_payload(profile: ClipProfile) -> ClipProfilePayload:
         note_density_per_beat=profile.note_density_per_beat,
         onset_density_per_beat=profile.onset_density_per_beat,
         max_polyphony=profile.max_polyphony,
+        melodic_interval_count=profile.melodic_interval_count,
+        ascending_motion_count=profile.ascending_motion_count,
+        descending_motion_count=profile.descending_motion_count,
+        repeated_motion_count=profile.repeated_motion_count,
+        mean_absolute_interval_semitones=(
+            profile.mean_absolute_interval_semitones
+        ),
+        largest_interval_semitones=profile.largest_interval_semitones,
         pitch_class_histogram=list(profile.pitch_class_histogram),
         scale_candidates=[
             ScaleCandidatePayload(

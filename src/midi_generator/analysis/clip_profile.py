@@ -27,6 +27,12 @@ class ClipProfile:
     note_density_per_beat: float
     onset_density_per_beat: float
     max_polyphony: int
+    melodic_interval_count: int
+    ascending_motion_count: int
+    descending_motion_count: int
+    repeated_motion_count: int
+    mean_absolute_interval_semitones: float | None
+    largest_interval_semitones: int | None
     pitch_class_histogram: tuple[int, ...]
     scale_candidates: tuple[ScaleCandidate, ...]
 
@@ -47,6 +53,8 @@ def analyze_clip(clip: EditableMidiClip) -> ClipProfile:
     lowest_pitch = min(pitches) if pitches else None
     highest_pitch = max(pitches) if pitches else None
     sounding_count = len(sounding)
+    melodic_intervals = _top_line_intervals(sounding)
+    melodic_interval_count = len(melodic_intervals)
     return ClipProfile(
         clip_length_ticks=clip.length_ticks,
         ticks_per_beat=clip.ticks_per_beat,
@@ -78,6 +86,24 @@ def analyze_clip(clip: EditableMidiClip) -> ClipProfile:
             len(onsets) * clip.ticks_per_beat, clip.length_ticks, 3
         ),
         max_polyphony=_max_polyphony(sounding),
+        melodic_interval_count=melodic_interval_count,
+        ascending_motion_count=sum(interval > 0 for interval in melodic_intervals),
+        descending_motion_count=sum(interval < 0 for interval in melodic_intervals),
+        repeated_motion_count=sum(interval == 0 for interval in melodic_intervals),
+        mean_absolute_interval_semitones=(
+            _rounded_ratio(
+                sum(abs(interval) for interval in melodic_intervals),
+                melodic_interval_count,
+                2,
+            )
+            if melodic_intervals
+            else None
+        ),
+        largest_interval_semitones=(
+            max(abs(interval) for interval in melodic_intervals)
+            if melodic_intervals
+            else None
+        ),
         pitch_class_histogram=tuple(histogram),
         scale_candidates=rank_scale_candidates(clip),
     )
@@ -96,6 +122,21 @@ def _max_polyphony(notes: tuple[NoteEvent, ...]) -> int:
         active += deltas[position]
         maximum = max(maximum, active)
     return maximum
+
+
+def _top_line_intervals(notes: tuple[NoteEvent, ...]) -> tuple[int, ...]:
+    highest_pitch_by_onset: dict[int, int] = {}
+    for note in notes:
+        highest_pitch_by_onset[note.start] = max(
+            note.pitch, highest_pitch_by_onset.get(note.start, note.pitch)
+        )
+    top_line = tuple(
+        highest_pitch_by_onset[onset] for onset in sorted(highest_pitch_by_onset)
+    )
+    return tuple(
+        following - current
+        for current, following in zip(top_line, top_line[1:])
+    )
 
 
 def _rounded_ratio(numerator: int, denominator: int, digits: int) -> float:
