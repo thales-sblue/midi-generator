@@ -51,6 +51,11 @@ Ao receber uma instrução curta para prosseguir:
    do `.venv` se necessário).
 6. Revise o próprio diff procurando regressões, destruição involuntária,
    duplicação e vazamento de responsabilidades; então crie um commit coeso.
+7. Ao encerrar, informe uma estimativa do avanço percentual obtido naquele
+   `continue` e do percentual ainda restante para concluir a primeira versão
+   utilizável do assistente musical integrado ao Ableton. Trate os valores como
+   estimativas de capacidade, não como medições exatas, e mantenha consistente o
+   critério de conclusão entre ciclos.
 
 ## Fronteiras de validação
 
