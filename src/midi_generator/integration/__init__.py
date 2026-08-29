@@ -6,7 +6,11 @@ from .ableton_clip import (
     clip_notes_to_ableton,
     ticks_to_beats,
 )
-from .clip_profile import ClipProfilePayload, clip_profile_to_payload
+from .clip_profile import (
+    ClipProfilePayload,
+    ScaleCandidatePayload,
+    clip_profile_to_payload,
+)
 from .payload_v1 import (
     SCHEMA_VERSION,
     IntegrationPayload,
@@ -28,5 +32,6 @@ __all__ = [
     "clip_notes_to_ableton",
     "ticks_to_beats",
     "ClipProfilePayload",
+    "ScaleCandidatePayload",
     "clip_profile_to_payload",
 ]

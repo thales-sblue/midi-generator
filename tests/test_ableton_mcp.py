@@ -225,6 +225,8 @@ def test_analyze_clip_tool_reads_without_mutating_ableton(monkeypatch):
     assert result["clip_fingerprint"] == "source"
     assert result["profile"]["sounding_note_count"] == 1
     assert result["profile"]["pitch_class_histogram"][0] == 1
+    assert len(result["profile"]["scale_candidates"]) == 24
+    assert result["profile"]["scale_candidates"][0]["coverage"] == 1.0
 
 
 def test_mcp_client_receives_structured_clip_analysis(monkeypatch):
@@ -257,6 +259,13 @@ def test_mcp_client_receives_structured_clip_analysis(monkeypatch):
         0,
         0,
     ]
+    assert result.structured_content["profile"]["scale_candidates"][0] == {
+        "root_note": "C",
+        "scale": "major",
+        "matching_note_count": 1,
+        "tonic_note_count": 1,
+        "coverage": 1.0,
+    }
 
 
 def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch):

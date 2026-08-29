@@ -52,6 +52,13 @@ polifonia máxima e histograma das 12 classes de altura. Notas mutadas são
 contabilizadas, mas não influenciam as métricas musicais. A análise é pura,
 imutável e reutiliza `EditableMidiClip`, sem Live API, MCP ou Mido.
 
+O perfil também classifica as 24 escalas maior/menor por cobertura das notas
+audíveis e, em empate, pela quantidade de ocorrências da tônica. Cada candidato
+informa `matching_note_count`, `tonic_note_count` e `coverage`. O resultado é
+deliberadamente apresentado como compatibilidade: clips curtos e escalas
+relativas podem ter evidência idêntica, portanto o motor não inventa uma
+tonalidade única quando os dados não permitem distingui-la.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.

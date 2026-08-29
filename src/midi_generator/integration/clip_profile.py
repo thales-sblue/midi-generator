@@ -5,6 +5,14 @@ from typing import TypedDict
 from midi_generator.analysis import ClipProfile
 
 
+class ScaleCandidatePayload(TypedDict):
+    root_note: str
+    scale: str
+    matching_note_count: int
+    tonic_note_count: int
+    coverage: float
+
+
 class ClipProfilePayload(TypedDict):
     clip_length_ticks: int
     ticks_per_beat: int
@@ -21,6 +29,7 @@ class ClipProfilePayload(TypedDict):
     onset_density_per_beat: float
     max_polyphony: int
     pitch_class_histogram: list[int]
+    scale_candidates: list[ScaleCandidatePayload]
 
 
 def clip_profile_to_payload(profile: ClipProfile) -> ClipProfilePayload:
@@ -41,4 +50,14 @@ def clip_profile_to_payload(profile: ClipProfile) -> ClipProfilePayload:
         onset_density_per_beat=profile.onset_density_per_beat,
         max_polyphony=profile.max_polyphony,
         pitch_class_histogram=list(profile.pitch_class_histogram),
+        scale_candidates=[
+            ScaleCandidatePayload(
+                root_note=candidate.root_note,
+                scale=candidate.scale,
+                matching_note_count=candidate.matching_note_count,
+                tonic_note_count=candidate.tonic_note_count,
+                coverage=candidate.coverage,
+            )
+            for candidate in profile.scale_candidates
+        ],
     )

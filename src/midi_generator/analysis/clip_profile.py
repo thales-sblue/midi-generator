@@ -6,6 +6,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from midi_generator.domain import NoteEvent
 from midi_generator.transformations import EditableMidiClip
 
+from .scale_compatibility import ScaleCandidate, rank_scale_candidates
+
 
 @dataclass(frozen=True)
 class ClipProfile:
@@ -26,6 +28,7 @@ class ClipProfile:
     onset_density_per_beat: float
     max_polyphony: int
     pitch_class_histogram: tuple[int, ...]
+    scale_candidates: tuple[ScaleCandidate, ...]
 
 
 def analyze_clip(clip: EditableMidiClip) -> ClipProfile:
@@ -76,6 +79,7 @@ def analyze_clip(clip: EditableMidiClip) -> ClipProfile:
         ),
         max_polyphony=_max_polyphony(sounding),
         pitch_class_histogram=tuple(histogram),
+        scale_candidates=rank_scale_candidates(clip),
     )
 
 
