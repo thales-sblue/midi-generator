@@ -11,6 +11,7 @@ from midi_generator.transformations import (
     staccato,
     transpose,
     transpose_diatonic,
+    velocity_ramp,
 )
 
 
@@ -163,6 +164,70 @@ def test_staccato_rejects_non_positive_or_non_integer_duration():
             assert "positive integer" in str(error)
         else:
             raise AssertionError("invalid staccato duration was accepted")
+
+
+def test_velocity_ramp_shapes_crescendo_by_onset_and_preserves_note_properties():
+    original = (
+        NoteEvent(67, 960, 120, 20),
+        NoteEvent(60, 0, 240, 110, channel=2, track=3, mute=True),
+        NoteEvent(64, 480, 360, 50),
+        NoteEvent(72, 480, 120, 100),
+    )
+    clip = make_clip(*original)
+
+    result = velocity_ramp(clip, start_velocity=40, end_velocity=100)
+
+    assert result.notes == (
+        NoteEvent(67, 960, 120, 100),
+        NoteEvent(60, 0, 240, 40, channel=2, track=3, mute=True),
+        NoteEvent(64, 480, 360, 70),
+        NoteEvent(72, 480, 120, 70),
+    )
+    assert clip.notes == original
+
+
+def test_velocity_ramp_supports_diminuendo_with_symmetric_half_up_rounding():
+    clip = make_clip(
+        NoteEvent(60, 0, 120, 90),
+        NoteEvent(62, 1, 120, 90),
+        NoteEvent(64, 2, 120, 90),
+    )
+
+    crescendo = velocity_ramp(clip, 40, 41)
+    diminuendo = velocity_ramp(clip, 41, 40)
+
+    assert [note.velocity for note in crescendo.notes] == [40, 41, 41]
+    assert [note.velocity for note in diminuendo.notes] == [41, 40, 40]
+
+
+def test_velocity_ramp_handles_empty_and_single_onset_clips():
+    empty = make_clip()
+    chord = make_clip(
+        NoteEvent(60, 240, 120, 90),
+        NoteEvent(64, 240, 120, 70),
+    )
+
+    assert velocity_ramp(empty, 30, 100) == empty
+    assert [note.velocity for note in velocity_ramp(chord, 55, 110).notes] == [55, 55]
+
+
+def test_velocity_ramp_rejects_invalid_endpoints_without_mutating_input():
+    clip = make_clip(NoteEvent(60, 0, 120, 90))
+
+    for start_velocity, end_velocity, message in [
+        (0, 100, "start_velocity"),
+        (40, 128, "end_velocity"),
+        (True, 100, "start_velocity"),
+        (40, 100.0, "end_velocity"),
+    ]:
+        try:
+            velocity_ramp(clip, start_velocity, end_velocity)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("invalid velocity ramp was accepted")
+
+    assert clip.notes[0].velocity == 90
 
 
 def test_constrain_to_scale_snaps_only_out_of_scale_notes_and_preserves_properties():

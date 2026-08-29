@@ -29,6 +29,22 @@ O motor de composição é independente de bibliotecas MIDI: ele transforma um `
 
 A camada `transformations/` reutiliza `NoteEvent` e acrescenta somente o contêiner imutável `EditableMidiClip`, necessário para carregar o comprimento do clip e validar suas bordas. `NoteEvent` inclui `mute=False`, preservando compatibilidade com a geração e permitindo representar fielmente as notas lidas do Live. As transformações operam em ticks inteiros, com 480 ticks por beat, sem Mido, Live API ou efeitos colaterais.
 
+O domínio também oferece `velocity_ramp`, uma transformação expressiva pura
+para crescendo e diminuendo. Ela interpola velocities inteiras entre o primeiro
+e o último onset real do clip, aplica o mesmo valor às notas de um acorde e
+preserva pitch, timing, duração, mute, canal, track, ordem e o clip original:
+
+```python
+from midi_generator.transformations import velocity_ramp
+
+expressive_clip = velocity_ramp(clip, start_velocity=45, end_velocity=105)
+```
+
+O arredondamento é inteiro, explícito e simétrico nas duas direções. Clips
+vazios permanecem vazios; quando todos os eventos compartilham um único onset,
+usa-se `start_velocity` em todas as notas. Nesta etapa a operação pertence ao
+domínio puro e ainda não é exposta como transformação do Ableton.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.

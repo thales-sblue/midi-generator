@@ -12,6 +12,7 @@ from .operations import (
     staccato,
     transpose_diatonic,
     transpose,
+    velocity_ramp,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "staccato",
     "transpose_diatonic",
     "transpose",
+    "velocity_ramp",
 ]

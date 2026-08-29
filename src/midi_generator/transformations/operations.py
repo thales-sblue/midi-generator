@@ -87,6 +87,45 @@ def staccato(clip: EditableMidiClip, max_duration: int) -> EditableMidiClip:
     )
 
 
+def velocity_ramp(
+    clip: EditableMidiClip, start_velocity: int, end_velocity: int
+) -> EditableMidiClip:
+    """Shape note velocities linearly between the first and last onset."""
+    clip.validate()
+    for name, value in (
+        ("start_velocity", start_velocity),
+        ("end_velocity", end_velocity),
+    ):
+        if not _is_int(value) or not 1 <= value <= 127:
+            raise ValueError(f"{name} must be an integer between 1 and 127.")
+    if not clip.notes:
+        return replace(clip)
+
+    first_start = min(note.start for note in clip.notes)
+    last_start = max(note.start for note in clip.notes)
+    if first_start == last_start:
+        return replace(
+            clip,
+            notes=tuple(
+                replace(note, velocity=start_velocity) for note in clip.notes
+            ),
+        )
+
+    delta = end_velocity - start_velocity
+    span = last_start - first_start
+    return replace(
+        clip,
+        notes=tuple(
+            replace(
+                note,
+                velocity=start_velocity
+                + _round_ratio(delta * (note.start - first_start), span),
+            )
+            for note in clip.notes
+        ),
+    )
+
+
 def constrain_to_scale(
     clip: EditableMidiClip, root_note: str, scale: str
 ) -> EditableMidiClip:
@@ -210,6 +249,13 @@ def _round_to_grid(position: int, grid_ticks: int) -> int:
     if remainder * 2 >= grid_ticks:
         quotient += 1
     return quotient * grid_ticks
+
+
+def _round_ratio(numerator: int, denominator: int) -> int:
+    magnitude, remainder = divmod(abs(numerator), denominator)
+    if remainder * 2 >= denominator:
+        magnitude += 1
+    return magnitude if numerator >= 0 else -magnitude
 
 
 def _scale_definition(root_note: str, scale: str) -> tuple[int, tuple[int, ...]]:
