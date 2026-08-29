@@ -299,6 +299,27 @@ def test_transform_tool_exposes_diatonic_transposition(monkeypatch):
     assert result["transform"] == "transpose_diatonic"
 
 
+def test_transform_tool_exposes_non_destructive_diatonic_harmony(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = transform_ableton_midi_clip(
+        0,
+        0,
+        0,
+        1,
+        "harmonize_diatonic",
+        steps=2,
+        root_note="C",
+        scale="major",
+    )
+
+    assert [note["pitch"] for note in fake.replaced[3]] == [60, 64]
+    assert fake.duplicated == (0, 0, 0, 1, "source")
+    assert result["note_count"] == 2
+    assert result["transform"] == "harmonize_diatonic"
+
+
 def test_real_mcp_client_discovers_and_calls_transform_tool(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

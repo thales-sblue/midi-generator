@@ -10,6 +10,7 @@ from midi_generator.integration import (
 )
 from midi_generator.transformations import (
     constrain_to_scale,
+    harmonize_diatonic,
     humanize,
     invert,
     legato,
@@ -30,6 +31,7 @@ TRANSFORMS = {
     "humanize",
     "constrain_to_scale",
     "transpose_diatonic",
+    "harmonize_diatonic",
 }
 
 
@@ -121,6 +123,10 @@ def transform_midi_clip_copy(
 
 
 def _apply_transform(clip, transform: str, parameters: dict[str, Any]):
+    if transform == "harmonize_diatonic":
+        return harmonize_diatonic(
+            clip, parameters["steps"], parameters["root_note"], parameters["scale"]
+        )
     if transform == "transpose_diatonic":
         return transpose_diatonic(
             clip, parameters["steps"], parameters["root_note"], parameters["scale"]
@@ -163,7 +169,8 @@ def _validate_parameters(
     if transform not in TRANSFORMS:
         raise ValueError(
             "transform must be 'transpose', 'invert', 'retrograde', 'legato', "
-            "'staccato', 'constrain_to_scale', 'transpose_diatonic', 'quantize', or 'humanize'."
+            "'staccato', 'constrain_to_scale', 'transpose_diatonic', "
+            "'harmonize_diatonic', 'quantize', or 'humanize'."
         )
     if transform == "transpose":
         if semitones is None:
@@ -191,6 +198,10 @@ def _validate_parameters(
     if transform == "transpose_diatonic":
         if steps is None or root_note is None or scale is None:
             raise ValueError("transpose_diatonic requires steps, root_note and scale.")
+        return {"steps": steps, "root_note": root_note, "scale": scale}
+    if transform == "harmonize_diatonic":
+        if steps is None or root_note is None or scale is None:
+            raise ValueError("harmonize_diatonic requires steps, root_note and scale.")
         return {"steps": steps, "root_note": root_note, "scale": scale}
     if transform == "quantize":
         if grid is None:

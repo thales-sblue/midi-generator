@@ -176,6 +176,78 @@ def test_diatonic_transposition_is_preflighted_and_applied_only_to_copy():
     assert result["transform"] == "transpose_diatonic"
 
 
+def test_diatonic_harmony_adds_voice_only_to_protected_copy():
+    client = RecordingClient(source=snapshot(0, 0, "source", pitch=60))
+
+    result = transform_midi_clip_copy(
+        client,
+        0,
+        0,
+        0,
+        1,
+        "harmonize_diatonic",
+        steps=2,
+        root_note="C",
+        scale="major",
+    )
+
+    assert [call[0] for call in client.calls] == [
+        "get",
+        "duplicate",
+        "get",
+        "replace",
+    ]
+    assert [note["pitch"] for note in client.calls[-1][4]] == [60, 64]
+    assert client.source["notes"] == [
+        {
+            "pitch": 60,
+            "start_time": 0.5,
+            "duration": 0.5,
+            "velocity": 90,
+            "mute": True,
+        }
+    ]
+    assert result["note_count"] == 2
+    assert result["transform"] == "harmonize_diatonic"
+
+
+def test_diatonic_harmony_rejects_foreign_pitch_before_duplicate():
+    client = RecordingClient(source=snapshot(0, 0, "source", pitch=61))
+
+    with pytest.raises(ValueError, match="must belong"):
+        transform_midi_clip_copy(
+            client,
+            0,
+            0,
+            0,
+            1,
+            "harmonize_diatonic",
+            steps=2,
+            root_note="C",
+            scale="major",
+        )
+
+    assert client.calls == [("get", 0, 0)]
+
+
+def test_missing_diatonic_harmony_parameters_fail_before_reading_source():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="harmonize_diatonic requires"):
+        transform_midi_clip_copy(
+            client,
+            0,
+            0,
+            0,
+            1,
+            "harmonize_diatonic",
+            root_note="C",
+            scale="major",
+        )
+
+    assert client.calls == []
+
+
 def test_missing_tonality_fails_before_reading_source():
     client = RecordingClient()
 

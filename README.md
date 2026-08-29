@@ -468,6 +468,30 @@ alinhadas à altura permitida mais próxima, com desempate para baixo. Se qualqu
 resultado exceder `0..127`, a operação inteira falha antes de duplicar o clip.
 Status da integração Live: **PENDENTE DE VALIDAÇÃO MANUAL**.
 
+Harmonia diatônica paralela, preservando a voz original:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "transform": "harmonize_diatonic",
+  "steps": 2,
+  "root_note": "C",
+  "scale": "major"
+}
+```
+
+`harmonize_diatonic` mantém todas as notas do source e acrescenta, na cópia,
+uma voz paralela deslocada por `steps` graus da escala; em Dó maior,
+`steps = 2` acrescenta Mi acima de Dó. Timing, duração, velocity, mute, canal e
+track são preservados. O source precisa estar integralmente na tonalidade para
+evitar alterar implicitamente a melodia antes da harmonização. Passos iguais a
+zero e resultados fora de `0..127` falham no preflight, antes da duplicação.
+Notas harmônicas que já existam com todas as mesmas propriedades não são
+duplicadas. Status da integração Live: **PENDENTE DE VALIDAÇÃO MANUAL**.
+
 Humanize determinístico:
 
 ```json
@@ -631,7 +655,7 @@ As tools de baixo nível continuam apenas encaminhando primitivas ao `AbletonCli
 
 **VALIDADO AUTOMATICAMENTE:** a suíte cobre leitura e ordenação das notas, estabilidade e mudança do fingerprint, substituição com controle de concorrência, validação anterior à mutação, limite do clip, duplicação para slot vazio, protocolo/client e delegação das tools MCP de baixo nível.
 
-A suíte também cobre transpose positivo e negativo, inversão melódica por eixo, reflexão temporal e involução exata de invert e retrograde, articulações legato por grupos de onset e staccato por duração máxima, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
+A suíte também cobre transpose positivo e negativo, inversão melódica por eixo, reflexão temporal e involução exata de invert e retrograde, articulações legato por grupos de onset e staccato por duração máxima, transposição e harmonia diatônicas, preservação da voz original na cópia harmonizada, as três grades de quantize, regras de borda e duração, determinismo e limites do humanize, imutabilidade dos inputs, preflight antes da duplicação, uso do fingerprint da cópia, propagação de `CLIP_CHANGED`, descoberta e chamada MCP estruturada da tool de transformação.
 
 As transformações desta versão operam somente sobre MIDI clips da Session View. Não criam tracks, instrumentos ou devices e não controlam transporte, Arrangement View, automações, mixagem ou áudio.
 
