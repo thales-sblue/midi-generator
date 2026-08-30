@@ -1,5 +1,10 @@
 # Direção do projeto
 
+> Este arquivo é canônico para a direção de produto, o licenciamento e o
+> protocolo de trabalho, qualquer que seja o assistente. No Claude Code, leia
+> também [`CLAUDE.md`](CLAUDE.md), que cobre apenas o ambiente local (venv,
+> comandos, `--basetemp` do pytest, estado do `origin`).
+
 `midi-generator` deve evoluir de gerador/ponte MIDI para o motor musical de um
 assistente de produção integrado ao Ableton Live. A infraestrutura não é o
 produto final: cada incremento deve aproximar o sistema de análise,
