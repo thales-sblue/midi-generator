@@ -15,17 +15,13 @@ Ableton Live. Nada abaixo tem precedência sobre `AGENTS.md`.
 - Repositório: `C:\GIT\midi-generator`. Clonado de
   `C:\Users\Thales\Documents\ChatGPT\midi-generator` em 30/08/2026, quando o
   trabalho migrou do Codex para o Claude Code.
-- `origin` ainda aponta para o caminho local de origem. Antes do primeiro push,
-  reaponte para o GitHub e valide o acesso:
-
-  ```powershell
-  git remote set-url origin https://github.com/thales-sblue/midi-generator.git
-  git fetch origin
-  ```
-
+- `origin` = `https://github.com/thales-sblue/midi-generator.git` (reapontado e
+  com push validado em 30/08/2026). `git fetch origin` para conferir acesso.
 - Python 3.12.13. Não há `python` no PATH; o `.venv` local foi criado a partir de
   `C:\Users\Thales\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
 - Use sempre o interpretador do `.venv`: `.venv\Scripts\python.exe`.
+- Pendência: migrar o `.venv` para um Python 3.12 instalado normalmente antes que
+  o cache `codex-runtimes` pare de ser mantido ou seja removido.
 
 ## Comandos
 
@@ -86,39 +82,32 @@ python -m midi_generator.ableton doctor
 | `ableton_remote_script/MidiGeneratorBridge/` | Control Surface Python 3 que roda dentro do Live |
 | `experiments/`, `docs/POC_SKYTNT*` | POC isolada do SkyTNT; **não integrada** ao runtime |
 
-## Estado atual (30/08/2026)
+## Estado atual
 
-- Runtime exclusivamente heurístico/determinístico. Nenhum modelo generativo no
-  runtime; a POC do SkyTNT passou em CUDA/CPU/offline mas aguarda escuta
-  comparativa antes de virar backend (`docs/POC_SKYTNT_RESULTS.md`).
-- Bridge própria do Ableton validada manualmente no Live 12.4.5 para geração,
-  edição, duplicação protegida e transformações `transpose`, `invert`,
-  `retrograde`, `quantize`, `humanize`, `legato`, `staccato`.
-- **Pendentes de validação manual no Live:** `constrain_to_scale`,
-  `transpose_diatonic`, `harmonize_diatonic`, `velocity_ramp` e
-  `create_contextual_variation_from_ableton_clip`. Lógica de domínio, preflight e
-  orquestração MCP já têm cobertura automatizada; falta conferir a escrita no
-  piano roll.
-- Auditoria arquitetural (`docs/ARCHITECTURE_AUDIT.md`): estender, não
-  refatorar. Congelar expansão própria de tracks/mixer/devices/Arrangement até
-  avaliar `ableton-live-mcp` / AbletonOSC no Live real.
+Fonte única de status vivo: [`docs/STATE.md`](docs/STATE.md) — feito, validações
+manuais no Live pendentes, gate de escuta do SkyTNT, decisões em aberto e fila de
+incrementos. Comece cada ciclo por ele.
 
 ## Lembretes de fluxo (ver detalhe em `AGENTS.md`)
 
+- Comece o ciclo lendo `docs/STATE.md` (contexto) e `AGENTS.md` (regras).
 - Um único incremento coeso por ciclo; a menor capacidade útil, determinística,
   independente do Ableton e testável isoladamente.
-- Toda aleatoriedade vem de `random.Random(seed)`; nunca estado global.
+- Reprodutibilidade em dois níveis: bit-exato (heurístico, contextual,
+  transformações — aleatoriedade só de `random.Random(seed)`, nunca estado
+  global); ambiente fixado (futuro backend de modelo registra device/dtype/libs).
 - Operações sobre material existente são não destrutivas por padrão; proteja
   mutações concorrentes com fingerprint e recuse estado obsoleto (`CLIP_CHANGED`).
 - MIDI gerado vai para `output/` e não é versionado.
 - Não quebre o `Integration Payload v1` silenciosamente; evolua por versão.
-- Rode a suíte completa antes e depois de alterar código; revise o próprio diff;
-  só então crie um commit coeso.
+- Rode a suíte completa antes e depois de alterar código; revise o próprio diff.
+  `/code-review` antes do commit é auxílio recomendado; `security-review` antes de
+  mexer na bridge ou no Remote Script.
 - Não registre validação manual do Live sem evidência real. Ao parar numa
-  fronteira de validação, deixe o status explicitamente pendente com os
-  payloads e conferências mínimas.
-- Encerre cada ciclo com uma estimativa do avanço percentual e do que falta para
-  a primeira versão utilizável do assistente integrado ao Ableton.
+  fronteira de validação, deixe o status explicitamente pendente em `docs/STATE.md`
+  com os payloads e conferências mínimas.
+- Encerre cada ciclo com uma estimativa do avanço percentual contra o escopo do
+  v1 (ver "Escopo da primeira versão utilizável" em `AGENTS.md`).
 - Após suíte verde, revisão feita e commit criado, publique o HEAD validado
   direto em `origin/main` (fast-forward apenas), confirmando que o push terminou
   sem erro.

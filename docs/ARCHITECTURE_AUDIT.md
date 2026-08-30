@@ -9,17 +9,26 @@ que diferencia o produto: estruturas MIDI pequenas e independentes, geração e
 transformação reproduzíveis, análise objetiva, contratos versionados e uma
 barreira de segurança não destrutiva validada no Ableton Live 12 Lite.
 
-As maiores lacunas para a primeira versão útil não são mais transformações
-isoladas nem primitivas de Session View. São geração local multitrack de maior
+As quatro lacunas para a visão completa são: geração local multitrack de maior
 qualidade, avaliação/seleção de alternativas, proveniência completa e operações
 amplas de produção no Live. Geração e integração ampla com o Live têm candidatos
 externos relevantes; reimplementá-las agora seria construir infraestrutura, não
 capacidade musical.
 
-Decisão deste ciclo: nenhuma refatoração de código. O menor incremento necessário
-é tornar permanentes as regras de admissão e registrar a fronteira futura de
-backends/proveniência. A POC isolada do SkyTNT foi executada depois desta
-auditoria; os resultados estão em `docs/POC_SKYTNT_RESULTS.md` e ainda não
+Atualização de 30/08/2026 (pós-migração para o Claude Code): o escopo do v1 foi
+fixado em `AGENTS.md` como o motor determinístico (heurístico + contextual +
+bridge Session-View validada); geração por modelo e Live amplo são pós-v1. Das
+quatro lacunas, a #2 (avaliação/seleção de alternativas) é construível já, sem
+modelo, e é a trilha de maior alavancagem — também é o instrumento que torna o
+gate de escuta um experimento repetível. Ressalva na lacuna #1: os modelos de
+licença permissiva observados (SkyTNT, AMT) dão controle de alto nível fraco
+sobre densidade, duração e dinâmica; a hipótese de design passa a ser híbrida
+(modelo gera ideia, heurístico + transformações + assistente controlam).
+
+Decisão do ciclo original: nenhuma refatoração de código. O menor incremento
+necessário é tornar permanentes as regras de admissão e registrar a fronteira
+futura de backends/proveniência. A POC isolada do SkyTNT foi executada depois
+desta auditoria; os resultados estão em `docs/POC_SKYTNT_RESULTS.md` e ainda não
 autorizam integração sem comparação auditiva.
 
 ## Mapa atual
@@ -65,6 +74,18 @@ AbletonOSC, também MIT e local, oferece uma API OSC ampla para song, tracks,
 clips/notas, devices e mixer, com alguma leitura de Arrangement. É uma base de
 transporte mais genérica e menos orientada a tools de agente.
 
+`ahujasid/ableton-mcp` (MIT) é um Remote Script + servidor MCP com socket
+JSON/TCP — arquitetura quase idêntica à bridge deste projeto, orientado ao
+Claude, cobrindo tracks, clips, devices, Arrangement, transporte e tempo.
+`Simon-Kansara/ableton-live-mcp-server` mapeia o AbletonOSC para tools MCP.
+Nenhuma das quatro opções (esta lista + `wstierhout` + AbletonOSC) oferece
+não-destrutividade por padrão, fingerprint ou controle de concorrência: envolver
+qualquer uma na nossa camada de segurança significa reconstruir essa camada em
+torno de código de terceiros que se move rápido. Isso enfraquece a hipótese
+"envolver externo" e mantém "estender a bridge própria" como alternativa viva. O
+escopo Ableton do v1 é apenas MIDI clips na Session View; nenhuma avaliação de
+Live amplo está agendada.
+
 Consequência: congelar criação própria de tracks, mixer, devices, browser,
 Arrangement e automação. Antes de usar qualquer candidato, ainda é obrigatório:
 
@@ -81,9 +102,10 @@ Arrangement e automação. Antes de usar qualquer candidato, ainda é obrigatór
 As operações atuais são pequenas demais para justificar music21. Quando o core
 precisar de análise harmônica, voice leading ou teoria substancial, avaliar o
 toolkit BSD e evitar seu corpus sem auditoria por obra. MusPy oferece métricas
-úteis para comparar backends, mas ainda não existe comparação que justifique o
-custo de runtime. MidiTok resolve tokenização/treino; os candidatos SkyTNT e Aria
-já possuem tokenizers próprios, portanto adicioná-lo agora seria antecipação.
+úteis para comparar backends; fica liberado apenas dentro de uma venv isolada de
+avaliação/experimentos, nunca como dependência de runtime ou default. MidiTok
+resolve tokenização/treino; os candidatos SkyTNT e Aria já possuem tokenizers
+próprios, portanto adicioná-lo agora seria antecipação.
 
 ## Candidatos generativos
 
@@ -112,6 +134,23 @@ já possuem tokenizers próprios, portanto adicioná-lo agora seria antecipaçã
   não declaram restrição `NonCommercial`; ainda assim, a POC deve arquivar a
   revisão e os termos observados.
 
+### Anticipatory Music Transformer — candidato a avaliar depois do SkyTNT
+
+- `stanford-crfm/music-medium-800k` (360M, GPT-2 com tokenização por tempo de
+  chegada e "anticipation"). Código Apache-2.0; pesos marcados `apache-2.0` na
+  tag e no `cardData` do Hugging Face.
+- Diferencial: infilling e acompanhamento nativos (gerar baixo sob uma melodia,
+  preencher lacuna, harmonizar) — mais alinhado a "assistente de produção" do que
+  a continuação pura do SkyTNT.
+- Risco de dados: treinado no Lakh MIDI, que a própria Stanford CRFM marca como
+  "copyright presumidamente mais restritivo que a licença sugere". Mesma classe
+  de ressalva de proveniência/memorização dos datasets do SkyTNT; exige as
+  mesmas mitigações (prompts próprios, alternativas, análise de similaridade,
+  seleção humana) e revisão separada antes de qualquer treino/fine-tuning.
+- Sequenciar **depois** de o gate de escuta cega do SkyTNT resolver; `AGENTS.md`
+  proíbe provar dois backends generativos em paralelo. Adicionado ao ledger como
+  `investigar`.
+
 ### Aria — candidato especializado posterior
 
 O projeto declara código, modelos e tooling Apache-2.0. O modelo de cerca de
@@ -138,11 +177,13 @@ backend padrão de um produto orientado a lançamento e monetização.
 | adapter Ableton amplo ser destrutivo | perda de trabalho | manter nossa camada de segurança e validação real |
 | schema de proveniência quebrar Payload v1 | regressão de integração | schema novo e adapter explícito |
 | dependências pesadas contaminarem runtime leve | instalação frágil | extras/processo isolado e backend opcional |
+| qualquer backend torch rebaixar o contrato de determinismo (bit-exato → ambiente fixado) | reprodução deixa de ser garantida só por seed | dois níveis explícitos em `AGENTS.md`; device/dtype/versões viram proveniência obrigatória; nível bit-exato do heurístico e das transformações é intocável |
+| socket TCP local da bridge sem autenticação | qualquer processo local dirige o Live enquanto ele roda | severidade baixa em máquina solo; bind restrito a `127.0.0.1`; reavaliar se o escopo sair de dev pessoal |
 
 ## Arquitetura-alvo incremental
 
 ```text
-Codex / usuário
+Assistente / usuário
       ↓ intenção, seleção e decisões humanas
 midi-generator — orquestração e contexto
       ├─ domínio/análise/transformações próprias
@@ -170,3 +211,13 @@ determinismo dentro do mesmo dispositivo, mas divergência CPU/CUDA e controle
 expressivo limitado. O protocolo está em `docs/POC_SKYTNT.md`, e as evidências
 em `docs/POC_SKYTNT_RESULTS.md`. O próximo gate é escuta comparativa; até lá, o
 estado permanece `investigar` e não existe backend novo no runtime.
+
+## Lacunas de CI (registro, não é ciclo)
+
+`.github/workflows/tests.yml` roda apenas Ubuntu + `pytest`. Não há checagem de
+tipos (mypy/pyright, embora o código seja todo tipado), lint, job Windows, piso
+de cobertura, nem qualquer cobertura do Remote Script
+(`ableton_remote_script/MidiGeneratorBridge/`, que roda no Python embutido do
+Live) ou do bridge TCP. "204 testes verdes" superestima a confiança sobre a
+plataforma alvo real (Windows + RTX 3070 + um driver/torch específicos).
+Endereçar em ciclo próprio quando fizer sentido.

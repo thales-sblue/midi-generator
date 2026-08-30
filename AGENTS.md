@@ -16,11 +16,29 @@ próprias com bibliotecas maduras, modelos generativos locais e integração loc
 com o Ableton. Não é objetivo reimplementar um DAW, uma biblioteca universal de
 teoria musical, um Transformer MIDI ou toda a Live API.
 
+## Escopo da primeira versão utilizável
+
+A "primeira versão utilizável" cobrada pelo Protocolo para "continue" é:
+**backend heurístico + geração contextual + bridge própria de MIDI clips na
+Session View, validada no Live real.** Backends de modelo generativo e operações
+amplas no Live (tracks, mixer, devices, Arrangement, automação, transporte) são
+explicitamente pós-v1. O escopo Ableton do v1 é apenas MIDI clips na Session
+View. A estimativa de percentual de cada ciclo mede o avanço contra esse escopo.
+
+Hipótese de trabalho para pós-v1: design **híbrido** — o modelo gera ideia bruta;
+o heurístico, as transformações determinísticas e o assistente externo fazem o
+controle fino. A confirmar no gate de escuta comparativa.
+
 ## Restrições de produto e licenciamento
 
 - O runtime e a produção musical não podem depender de API comercial cobrada
-  por uso, inferência remota paga ou SaaS obrigatório. O uso externo do Codex
-  pelo plano do usuário não autoriza dependência da OpenAI API no projeto.
+  por uso, inferência remota paga ou SaaS obrigatório. Isso vale para qualquer
+  API comercial de LLM/assistente (OpenAI, Anthropic, etc.): usar Codex, Claude
+  ou outro assistente para desenvolver o projeto não autoriza dependência da API
+  do respectivo provedor no runtime ou na produção musical.
+- O assistente externo que interpreta linguagem natural e orquestra os ciclos é
+  uma peça separada do motor. Ele pode ser uma API paga; o motor alcançado por
+  ele via MCP tem de rodar standalone, local e offline, sem esse assistente.
 - Pesos podem ser baixados inicialmente, mas a inferência deve funcionar
   localmente e, depois do download, offline sempre que o backend permitir.
 - Toda dependência relevante exige avaliação separada da licença do código, dos
@@ -47,8 +65,12 @@ virar uma coleção de dependências.
 - Considere MusPy para avaliação comparativa e MidiTok apenas quando treinamento
   ou tokenização independente realmente exigirem; não os adicione por padrão.
 - Não expanda a bridge própria para grandes áreas novas do Live antes de avaliar
-  Ableton Live MCP e AbletonOSC. A hipótese preferencial é manter nossa camada
-  de segurança/orquestração sobre uma integração externa mais ampla.
+  as integrações externas (Ableton Live MCP, AbletonOSC, `ahujasid/ableton-mcp`,
+  `Simon-Kansara/ableton-live-mcp-server`). A hipótese preferencial era manter
+  nossa camada de segurança/orquestração sobre uma integração externa mais ampla;
+  como nenhuma das opções pesquisadas oferece não-destrutividade, fingerprint ou
+  controle de concorrência, "envolver externo" vs "estender a bridge própria"
+  fica em aberto. Nenhuma avaliação de Live amplo está agendada para o v1.
 - Faça POC isolada e reproduzível antes de integrar ou substituir. Fixe versão,
   checkpoint, licença, hardware, seed, entradas, parâmetros e outputs. Uma POC
   bem-sucedida ainda exige equivalência automatizada e validação real no Live
@@ -66,13 +88,20 @@ virar uma coleção de dependências.
   parâmetros, contexto MIDI, resultado gerado, transformações, versões
   intermediárias e decisões humanas. Evolua contratos de integração por versão;
   não quebre silenciosamente o `Integration Payload v1`.
+- Um manifesto de proveniência v0 para os geradores heurístico e contextual
+  atuais é esperado antes ou junto do v1 (`generate_contextual_variation` já
+  entrega material derivado com apenas fingerprint). Ele fica em schema próprio
+  versionado, ao lado do Payload v1, nunca dentro dele.
 - Favoreça geração de alternativas, avaliação, seleção, transformação e edição
   humana. Evite um fluxo opaco que trate a primeira geração como obra final.
 
 ## Limites das camadas
 
 - **Assistente/raciocínio:** interpreta linguagem natural e converte intenção em
-  decisões musicais; não exige que o usuário formule operações técnicas.
+  decisões musicais; não exige que o usuário formule operações técnicas. É
+  intencionalmente uma peça externa (hoje o Claude Code; antes o Codex),
+  possivelmente uma API paga, fora do motor e substituível. O motor, alcançado
+  por ele via MCP, não depende dessa camada.
 - **Domínio/core:** concentra teoria, análise, geração e transformações musicais.
   Deve ser independente de Ableton, MCP, Mido e efeitos de I/O sempre que
   possível, para ser testável com estruturas MIDI próprias.
@@ -90,9 +119,14 @@ virar uma coleção de dependências.
   intenção explícita.
 - Proteja fluxos sujeitos a edições manuais concorrentes com fingerprints (ou
   mecanismo equivalente) e recuse estado obsoleto antes da mutação.
-- Toda transformação deve ser reproduzível. Toda aleatoriedade vem de
-  `random.Random(seed)` ou de mecanismo explicitamente derivado da seed; nunca
-  use estado aleatório global.
+- Reprodutibilidade tem dois níveis. **Bit-exato**, independente de plataforma:
+  o backend heurístico, a geração contextual e todas as transformações — toda
+  aleatoriedade vem de `random.Random(seed)` ou de mecanismo explicitamente
+  derivado da seed, nunca de estado aleatório global. **Ambiente fixado**: um
+  futuro backend de modelo só reproduz o mesmo output com seed + device + dtype +
+  versões de bibliotecas iguais (a mesma seed diverge entre CUDA/bfloat16 e
+  CPU/float32); esses valores passam a ser proveniência obrigatória. Nenhum
+  backend de modelo pode degradar o nível bit-exato das capacidades atuais.
 - Grave MIDI gerado em `output/` e não o versione, salvo exemplo intencional.
 - Não adicione GUI, controle de DAW adicional ou recursos de IA sem pedido
   explícito.
@@ -118,9 +152,9 @@ Ao receber uma instrução curta para prosseguir:
    duplicação e vazamento de responsabilidades; então crie um commit coeso.
 8. Ao encerrar, informe uma estimativa do avanço percentual obtido naquele
    `continue` e do percentual ainda restante para concluir a primeira versão
-   utilizável do assistente musical integrado ao Ableton. Trate os valores como
-   estimativas de capacidade, não como medições exatas, e mantenha consistente o
-   critério de conclusão entre ciclos.
+   utilizável, conforme a seção "Escopo da primeira versão utilizável". Trate os
+   valores como estimativas de capacidade, não como medições exatas, e mantenha
+   consistente o critério de conclusão entre ciclos.
 9. Depois que a suíte estiver validada, a revisão concluída e o commit criado com
    sucesso, publique o HEAD validado diretamente em `origin/main`, sem exigir
    branch intermediária ou pull request. Antes do push, atualize a referência do

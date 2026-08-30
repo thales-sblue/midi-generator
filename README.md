@@ -6,6 +6,17 @@ e segura; a evolução planejada combina esse domínio com backends generativos
 locais e integrações open source, sem API paga obrigatória e preservando a
 possibilidade de uso comercial dos resultados.
 
+## Escopo da primeira versão
+
+A primeira versão utilizável é o **motor determinístico**: backend heurístico +
+geração contextual + a bridge própria de MIDI clips na Session View, validada no
+Live real. Backends de modelo generativo e operações amplas no Live (tracks,
+mixer, devices, Arrangement, automação, transporte) são **pós-v1**.
+
+O motor roda local e offline. O assistente que interpreta linguagem natural (hoje
+o Claude Code) é uma peça externa e substituível, possivelmente uma API paga; ele
+não faz parte do motor, que funciona sem ele via MCP.
+
 ## Instalação
 
 ```powershell
@@ -48,6 +59,12 @@ comparativa. O runtime permanece leve e exclusivamente heurístico.
 O core não dependerá de um modelo ou adapter de Ableton específico. A bridge
 atual permanece ativa e validada enquanto alternativas mais amplas não provarem
 equivalência funcional e de segurança no Live real.
+
+A reprodutibilidade tem dois níveis: **bit-exato** e independente de plataforma
+para o heurístico, a geração contextual e as transformações (aleatoriedade só de
+`random.Random(seed)`); **ambiente fixado** para um futuro backend de modelo, que
+só reproduz o mesmo output com seed, device, dtype e versões de bibliotecas
+iguais — esses valores viram proveniência obrigatória.
 
 O motor de composição é independente de bibliotecas MIDI: ele transforma um `MelodyRequest` em um `CompositionPlan` formado por `NoteEvent`s. O `MidiExporter` é a única camada que usa Mido para converter esse plano em arquivo `.mid`.
 
@@ -208,7 +225,7 @@ O mesmo comando é executado pelo GitHub Actions em pushes e pull requests.
 A integração usa um MIDI Remote Script/Control Surface em Python 3 e não requer Max for Live, Suite, plugins, OSC ou automação de interface.
 
 ```text
-Codex / MCP Client
+Assistente / MCP Client
         ↓
     MCP stdio
         ↓
