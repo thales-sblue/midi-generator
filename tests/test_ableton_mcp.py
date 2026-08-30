@@ -7,6 +7,7 @@ from midi_generator.generation import generate_plan
 from midi_generator.integration import composition_to_payload
 from midi_generator.mcp.server import (
     analyze_ableton_midi_clip,
+    create_contextual_variation_from_ableton_clip,
     duplicate_ableton_midi_clip,
     generate_and_insert_melody,
     generate_contextual_melody_from_ableton_clip,
@@ -304,6 +305,42 @@ def test_mcp_client_generates_contextual_melody_without_mutating_live(monkeypatc
     assert composition["metadata"]["generation_mode"] == "contextual"
     assert composition["report"]["note_count"] == 2
     assert {note["pitch"] for note in composition["notes"]} == {60}
+
+
+def test_mcp_client_creates_contextual_variation_only_in_target(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            tools = await client.list_tools()
+            result = await client.call_tool(
+                "create_contextual_variation_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "bpm": 120,
+                    "root_note": "C",
+                    "scale": "major",
+                    "seed": 42,
+                },
+            )
+            return tools, result
+
+    tools, result = asyncio.run(call_tool())
+
+    assert "create_contextual_variation_from_ableton_clip" in {
+        tool.name for tool in tools.tools
+    }
+    assert result.is_error is False
+    assert fake.reads == [(0, 0), (0, 1)]
+    assert fake.duplicated == (0, 0, 0, 1, "source")
+    assert fake.replaced[:3] == (0, 1, "copy")
+    assert result.structured_content["contextualized"] is True
+    assert result.structured_content["source_clip_fingerprint"] == "source"
+    assert result.structured_content["target_clip_fingerprint"] == "result"
 
 
 def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch):

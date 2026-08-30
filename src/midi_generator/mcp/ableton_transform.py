@@ -3,12 +3,16 @@
 from typing import Any, TypedDict
 
 from midi_generator.ableton import AbletonClient
+from midi_generator.domain import MelodyRequest
+from midi_generator.generation import generate_contextual_plan
+from midi_generator.generation.melody import BEATS_PER_BAR
 from midi_generator.integration import (
     ableton_snapshot_to_clip,
     beats_to_ticks,
     clip_notes_to_ableton,
 )
 from midi_generator.transformations import (
+    EditableMidiClip,
     constrain_to_scale,
     harmonize_diatonic,
     humanize,
@@ -48,6 +52,93 @@ class TransformedClipResult(TypedDict):
     note_count: int
     source_clip_fingerprint: str
     target_clip_fingerprint: str
+
+
+class ContextualVariationResult(TypedDict):
+    contextualized: bool
+    source_track_index: int
+    source_scene_index: int
+    target_track_index: int
+    target_scene_index: int
+    clip_length_beats: float
+    note_count: int
+    source_clip_fingerprint: str
+    target_clip_fingerprint: str
+    bpm: int
+    root_note: str
+    scale: str
+    seed: int
+
+
+def create_contextual_midi_clip_copy(
+    client: AbletonClient,
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+) -> ContextualVariationResult:
+    """Generate a contextual variation and replace only a protected copy."""
+    _validate_indices(
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+    )
+    source_snapshot = client.get_midi_clip(source_track_index, source_scene_index)
+    source_fingerprint = _required_fingerprint(source_snapshot)
+    source_clip = ableton_snapshot_to_clip(source_snapshot)
+    ticks_per_bar = BEATS_PER_BAR * source_clip.ticks_per_beat
+    bars, remainder = divmod(source_clip.length_ticks, ticks_per_bar)
+    if remainder:
+        raise ValueError(
+            "Source clip length must be a whole number of 4/4 bars."
+        )
+
+    request = MelodyRequest(bpm, root_note, scale, bars, seed)
+    plan = generate_contextual_plan(request, source_clip)
+    contextual_clip = EditableMidiClip(
+        length_ticks=source_clip.length_ticks,
+        notes=plan.notes,
+        ticks_per_beat=source_clip.ticks_per_beat,
+    )
+    contextual_clip.validate()
+
+    client.duplicate_midi_clip(
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        expected_source_fingerprint=source_fingerprint,
+    )
+    copy_snapshot = client.get_midi_clip(target_track_index, target_scene_index)
+    copy_clip = ableton_snapshot_to_clip(copy_snapshot)
+    if copy_clip.length_ticks != contextual_clip.length_ticks:
+        raise ValueError("Duplicated clip length does not match the source clip.")
+    replacement = client.replace_midi_clip_notes(
+        target_track_index,
+        target_scene_index,
+        _required_fingerprint(copy_snapshot),
+        clip_notes_to_ableton(contextual_clip),
+    )
+    return ContextualVariationResult(
+        contextualized=True,
+        source_track_index=source_track_index,
+        source_scene_index=source_scene_index,
+        target_track_index=target_track_index,
+        target_scene_index=target_scene_index,
+        clip_length_beats=replacement["clip_length_beats"],
+        note_count=replacement["note_count"],
+        source_clip_fingerprint=source_fingerprint,
+        target_clip_fingerprint=replacement["clip_fingerprint"],
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+    )
 
 
 def transform_midi_clip_copy(

@@ -18,14 +18,16 @@ from midi_generator.integration import (
     validate_payload_v1,
 )
 from midi_generator.mcp.ableton_transform import (
+    ContextualVariationResult,
     TransformedClipResult,
+    create_contextual_midi_clip_copy,
     transform_midi_clip_copy,
 )
 
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.5.0",
+    version="1.6.0",
 )
 
 
@@ -139,6 +141,34 @@ def generate_contextual_melody_from_ableton_clip(
             source_scene_index=source_scene_index,
             source_clip_fingerprint=fingerprint,
             composition=composition_to_payload(plan),
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def create_contextual_variation_from_ableton_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+) -> ContextualVariationResult:
+    """Generate a contextual melody into a protected duplicate of the source."""
+    try:
+        return create_contextual_midi_clip_copy(
+            AbletonClient(),
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            bpm,
+            root_note,
+            scale,
+            seed,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

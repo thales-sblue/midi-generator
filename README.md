@@ -327,6 +327,37 @@ somente leitura: não cria nem substitui clips no Live. O chamador escolhe
 explicitamente `root_note` e `scale`, podendo usar os candidatos retornados pela
 análise sem transformar uma compatibilidade ambígua em decisão automática.
 
+`create_contextual_variation_from_ableton_clip` completa esse fluxo em uma cópia
+não destrutiva. O comprimento do source determina o número de compassos e é
+preservado no target; por enquanto, o source precisa ter um número inteiro de
+compassos 4/4. BPM, tonalidade e seed continuam explícitos. Exemplo:
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "bpm": 120,
+  "root_note": "C",
+  "scale": "minor",
+  "seed": 42
+}
+```
+
+Antes de criar o target, a tool valida os índices, o snapshot, o comprimento e
+simula integralmente a geração contextual no domínio. Depois, duplica o source
+exigindo o fingerprint que acabou de ler, relê a cópia e substitui somente as
+notas dela com o fingerprint da própria cópia. O source nunca é enviado à
+operação de substituição. Clips sem notas audíveis e parâmetros inválidos falham
+no preflight, antes da duplicação. O slot de destino deve estar vazio.
+
+Status da integração Live para
+`create_contextual_variation_from_ableton_clip`: **PENDENTE DE VALIDAÇÃO
+MANUAL**. Geração, determinismo, preflight, proteção do source e orquestração MCP
+são cobertos automaticamente; a criação e o conteúdo final ainda precisam ser
+conferidos no piano roll do Live.
+
 O `clip_fingerprint` é um SHA-256 de JSON canônico formado pelo comprimento do clip e pelas notas ordenadas, com floats normalizados a nove casas decimais. Toda substituição exige o fingerprint obtido na leitura. Se o conteúdo tiver mudado no Live desde então, o bridge recusa a operação com `CLIP_CHANGED`; o cliente deve ler novamente antes de editar. Requests inválidos são validados integralmente antes da remoção das notas existentes, e notas além do comprimento atual falham com `NOTE_OUTSIDE_CLIP`. O comprimento nunca é alterado implicitamente.
 
 Exemplo de leitura:

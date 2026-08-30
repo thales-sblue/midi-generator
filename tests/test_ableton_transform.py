@@ -1,7 +1,10 @@
 import pytest
 
 from midi_generator.ableton import AbletonCommandError
-from midi_generator.mcp.ableton_transform import transform_midi_clip_copy
+from midi_generator.mcp.ableton_transform import (
+    create_contextual_midi_clip_copy,
+    transform_midi_clip_copy,
+)
 
 
 def snapshot(track, scene, fingerprint, pitch=60):
@@ -66,6 +69,158 @@ class RecordingClient:
             "note_count": len(notes),
             "clip_fingerprint": "transformed",
         }
+
+
+def sounding_contextual_snapshot(fingerprint="source", length_beats=4.0):
+    return {
+        "track_index": 0,
+        "scene_index": 0,
+        "clip_length_beats": length_beats,
+        "notes": [
+            {
+                "pitch": 60,
+                "start_time": 0.0,
+                "duration": 0.5,
+                "velocity": 70,
+                "mute": False,
+            },
+            {
+                "pitch": 64,
+                "start_time": 2.0,
+                "duration": 1.0,
+                "velocity": 100,
+                "mute": False,
+            },
+        ],
+        "clip_fingerprint": fingerprint,
+    }
+
+
+def test_contextual_variation_generates_and_replaces_only_protected_copy():
+    source = sounding_contextual_snapshot()
+    client = RecordingClient(source=source)
+
+    result = create_contextual_midi_clip_copy(
+        client, 0, 0, 0, 1, 120, "C", "major", 42
+    )
+
+    assert [call[0] for call in client.calls] == [
+        "get",
+        "duplicate",
+        "get",
+        "replace",
+    ]
+    assert client.calls[1] == ("duplicate", 0, 0, 0, 1, "source")
+    assert client.calls[-1][1:4] == (0, 1, "copy")
+    assert client.calls[-1][4]
+    assert all(not note["mute"] for note in client.calls[-1][4])
+    assert source == sounding_contextual_snapshot()
+    assert result["contextualized"] is True
+    assert result["source_clip_fingerprint"] == "source"
+    assert result["target_clip_fingerprint"] == "transformed"
+    assert result["root_note"] == "C"
+    assert result["scale"] == "major"
+    assert result["seed"] == 42
+
+
+def test_contextual_variation_is_deterministic_for_same_seed():
+    first = RecordingClient(source=sounding_contextual_snapshot())
+    second = RecordingClient(source=sounding_contextual_snapshot())
+
+    create_contextual_midi_clip_copy(
+        first, 0, 0, 0, 1, 120, "C", "major", 19
+    )
+    create_contextual_midi_clip_copy(
+        second, 0, 0, 0, 1, 120, "C", "major", 19
+    )
+
+    assert first.calls[-1][4] == second.calls[-1][4]
+
+
+def test_contextual_variation_requires_whole_four_four_bars_before_duplicate():
+    client = RecordingClient(
+        source=sounding_contextual_snapshot(length_beats=3.0)
+    )
+
+    with pytest.raises(ValueError, match="whole number of 4/4 bars"):
+        create_contextual_midi_clip_copy(
+            client, 0, 0, 0, 1, 120, "C", "major", 42
+        )
+
+    assert client.calls == [("get", 0, 0)]
+
+
+@pytest.mark.parametrize(
+    ("source", "parameters", "message"),
+    [
+        (
+            snapshot(0, 0, "source"),
+            (120, "C", "major", 42),
+            "at least one sounding note",
+        ),
+        (
+            sounding_contextual_snapshot(),
+            (19, "C", "major", 42),
+            "BPM must be between 20 and 400",
+        ),
+        (
+            sounding_contextual_snapshot(),
+            (120, "H", "major", 42),
+            "Root note must be one of",
+        ),
+    ],
+)
+def test_contextual_variation_preflights_generation_before_duplicate(
+    source, parameters, message
+):
+    client = RecordingClient(source=source)
+
+    with pytest.raises(ValueError, match=message):
+        create_contextual_midi_clip_copy(client, 0, 0, 0, 1, *parameters)
+
+    assert client.calls == [("get", 0, 0)]
+
+
+def test_contextual_variation_rejects_same_source_and_target_before_read():
+    client = RecordingClient(source=sounding_contextual_snapshot())
+
+    with pytest.raises(ValueError, match="must be different"):
+        create_contextual_midi_clip_copy(
+            client, 0, 0, 0, 0, 120, "C", "major", 42
+        )
+
+    assert client.calls == []
+
+
+def test_contextual_variation_propagates_source_change_before_target_creation():
+    error = AbletonCommandError("CLIP_CHANGED", "source changed")
+    client = RecordingClient(
+        source=sounding_contextual_snapshot(), duplicate_error=error
+    )
+
+    with pytest.raises(AbletonCommandError) as caught:
+        create_contextual_midi_clip_copy(
+            client, 0, 0, 0, 1, 120, "C", "major", 42
+        )
+
+    assert caught.value.code == "CLIP_CHANGED"
+    assert [call[0] for call in client.calls] == ["get", "duplicate"]
+    assert not any(call[0] == "replace" for call in client.calls)
+
+
+def test_contextual_variation_refuses_unexpected_copy_length_before_replace():
+    client = RecordingClient(
+        source=sounding_contextual_snapshot(),
+        copy=sounding_contextual_snapshot(fingerprint="copy", length_beats=8.0),
+    )
+
+    with pytest.raises(ValueError, match="length does not match"):
+        create_contextual_midi_clip_copy(
+            client, 0, 0, 0, 1, 120, "C", "major", 42
+        )
+
+    assert [call[0] for call in client.calls] == ["get", "duplicate", "get"]
+    assert not any(call[0] == "replace" for call in client.calls)
 
 
 def test_transform_flow_only_replaces_copy_and_uses_copy_fingerprint():
