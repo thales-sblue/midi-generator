@@ -66,8 +66,8 @@ tonalidade única quando os dados não permitem distingui-la.
 `generate_contextual_plan` cria uma nova melodia monofônica determinística a
 partir de um `EditableMidiClip`. A tonalidade continua sendo uma decisão
 explícita do chamador; do clip de referência vêm a densidade e a distribuição
-de fase dos onsets, o registro, a duração média, a distribuição de classes de
-altura e os valores reais de velocity. Acordes contam como um único ataque, por
+de fase dos onsets, o registro, a distribuição de classes de altura e os valores
+reais de duração e velocity. Acordes contam como um único ataque, por
 isso a polifonia do source não infla a densidade de uma saída monofônica. Os
 onsets são projetados na grade de colcheias pela posição dentro do compasso e
 amostrados sem repetição. As proporções de movimentos ascendentes, descendentes
@@ -77,7 +77,9 @@ silenciosamente a direção. Classes de altura incompatíveis com a tonalidade
 escolhida são ignoradas; se nenhuma for compatível, o gerador usa todas as
 alturas permitidas no registro como fallback uniforme. Notas mutadas não
 influenciam nenhum desses atributos. A saída evita sobreposição e limita a
-densidade ao máximo possível na grade. Se a tonalidade escolhida não tiver
+densidade ao máximo possível na grade. Cada nota amostra uma duração real do
+source e só é encurtada quando necessário para não ultrapassar o onset seguinte
+ou o fim da saída. Se a tonalidade escolhida não tiver
 nenhuma nota dentro da tessitura do source, usa-se a altura permitida mais
 próxima, com desempate para baixo.
 

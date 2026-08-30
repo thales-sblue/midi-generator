@@ -42,6 +42,7 @@ def test_contextual_generation_inherits_density_register_and_dynamics():
     assert plan.metadata["motion_sampling"] == (
         "reference_top_line_distribution"
     )
+    assert plan.metadata["duration_sampling"] == "reference_values"
     assert reference == reference_clip()
 
 
@@ -82,6 +83,77 @@ def test_contextual_generation_samples_reference_pitch_classes_and_velocities():
         "reference_pitch_class_distribution"
     )
     assert plan.metadata["velocity_sampling"] == "reference_values"
+
+
+def test_contextual_generation_samples_reference_durations_without_overlap():
+    reference = EditableMidiClip(
+        length_ticks=1920,
+        notes=(
+            NoteEvent(60, 0, 120, 70),
+            NoteEvent(62, 480, 360, 80),
+            NoteEvent(64, 960, 120, 90),
+            NoteEvent(65, 1440, 360, 100),
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 4, 9), reference
+    )
+
+    assert {note.duration for note in plan.notes} == {120, 360}
+    assert all(
+        current.start + current.duration <= following.start
+        for current, following in zip(plan.notes, plan.notes[1:])
+    )
+    assert plan.notes[-1].start + plan.notes[-1].duration <= (
+        plan.total_duration_ticks
+    )
+
+
+def test_contextual_generation_truncates_sampled_duration_at_next_onset():
+    reference = EditableMidiClip(
+        length_ticks=480,
+        notes=(
+            NoteEvent(60, 0, 480, 80),
+            NoteEvent(64, 240, 240, 90),
+        ),
+    )
+
+    plan = generate_contextual_plan(
+        MelodyRequest(120, "C", "major", 1, 2), reference
+    )
+
+    assert [note.start for note in plan.notes] == list(range(0, 1920, 240))
+    assert {note.duration for note in plan.notes} == {240}
+
+
+def test_duration_sampling_does_not_perturb_other_contextual_attributes():
+    short = EditableMidiClip(
+        length_ticks=1920,
+        notes=tuple(
+            NoteEvent(pitch, index * 480, 120, 60 + index * 10)
+            for index, pitch in enumerate((60, 62, 64, 65))
+        ),
+    )
+    long = EditableMidiClip(
+        length_ticks=1920,
+        notes=tuple(
+            NoteEvent(note.pitch, note.start, 360, note.velocity)
+            for note in short.notes
+        ),
+    )
+    request = MelodyRequest(120, "C", "major", 2, 17)
+
+    short_plan = generate_contextual_plan(request, short)
+    long_plan = generate_contextual_plan(request, long)
+
+    assert tuple(
+        (note.pitch, note.start, note.velocity) for note in short_plan.notes
+    ) == tuple(
+        (note.pitch, note.start, note.velocity) for note in long_plan.notes
+    )
+    assert {note.duration for note in short_plan.notes} == {120}
+    assert {note.duration for note in long_plan.notes} == {360}
 
 
 def test_contextual_generation_falls_back_when_scale_has_no_reference_pitch_class():

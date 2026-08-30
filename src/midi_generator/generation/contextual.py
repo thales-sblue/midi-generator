@@ -15,6 +15,8 @@ from midi_generator.validation.musical_validation import validate_plan
 
 from .melody import BEATS_PER_BAR, STEP_TICKS, TICKS_PER_BEAT
 
+DURATION_SEED_SALT = 0x4455524154494F4E
+
 
 def generate_contextual_plan(
     request: MelodyRequest, reference: EditableMidiClip
@@ -50,6 +52,7 @@ def generate_contextual_plan(
         )
 
     rng = random.Random(request.seed)
+    duration_rng = random.Random(request.seed ^ DURATION_SEED_SALT)
     phase_weights = _onset_phase_weights(
         reference_onsets, reference.ticks_per_beat
     )
@@ -57,9 +60,7 @@ def generate_contextual_plan(
         rng, step_count, target_note_count, phase_weights
     )
     starts = tuple(step * STEP_TICKS for step in selected_steps)
-    mean_duration = _round_half_up(
-        sum(note.duration for note in sounding), len(sounding)
-    )
+    durations = tuple(note.duration for note in sounding)
     lowest_pitch = min(note.pitch for note in sounding)
     highest_pitch = max(note.pitch for note in sounding)
     pitches = _contextual_pitches(
@@ -84,7 +85,7 @@ def generate_contextual_plan(
                 ),
                 start=start,
                 duration=min(
-                    mean_duration,
+                    duration_rng.choice(durations),
                     (
                         starts[index + 1]
                         if index + 1 < len(starts)
@@ -122,6 +123,7 @@ def generate_contextual_plan(
             "rhythm_sampling": "reference_onset_phase_distribution",
             "pitch_sampling": "reference_pitch_class_distribution",
             "motion_sampling": "reference_top_line_distribution",
+            "duration_sampling": "reference_values",
             "velocity_sampling": "reference_values",
         },
     )
