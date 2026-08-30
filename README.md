@@ -1,6 +1,10 @@
 # midi-generator
 
-MVP em Python para gerar melodias MIDI determinísticas para produção musical.
+Motor e orquestrador musical local para um assistente de produção integrado ao
+Ableton Live. A base atual gera, analisa e transforma MIDI de forma determinística
+e segura; a evolução planejada combina esse domínio com backends generativos
+locais e integrações open source, sem API paga obrigatória e preservando a
+possibilidade de uso comercial dos resultados.
 
 ## Instalação
 
@@ -19,11 +23,25 @@ python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 -
 
 Os parâmetros são BPM, nota raiz, escala (`major` ou `minor`), número de compassos e seed. A mesma configuração produz exatamente os mesmos eventos MIDI.
 
-O gerador usa uma grade de colcheias em 4/4, inclui pausas, varia velocity e limita todas as alturas à escala escolhida. O projeto não inclui interface gráfica nem IA generativa.
+O gerador heurístico usa uma grade de colcheias em 4/4, inclui pausas, varia
+velocity e limita todas as alturas à escala escolhida. Ele permanecerá como
+backend leve e reproduzível. Modelos locais só serão adicionados como backends
+opcionais depois de POC de licença, hardware, qualidade e determinismo; o projeto
+não inclui IA generativa no runtime atual.
 
 O projeto inclui uma ponte opcional para Ableton Live 12 Lite. O motor, a exportação MIDI e `generate_melody` continuam funcionando normalmente sem Ableton; somente as operações descritas na seção "Ableton Live" exigem que o Live esteja aberto e com o Remote Script ativo.
 
 ## Arquitetura
+
+A direção, a auditoria e as regras de admissão de dependências estão em:
+
+- [`docs/ARCHITECTURE_AUDIT.md`](docs/ARCHITECTURE_AUDIT.md);
+- [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md);
+- [`docs/POC_SKYTNT.md`](docs/POC_SKYTNT.md).
+
+O core não dependerá de um modelo ou adapter de Ableton específico. A bridge
+atual permanece ativa e validada enquanto alternativas mais amplas não provarem
+equivalência funcional e de segurança no Live real.
 
 O motor de composição é independente de bibliotecas MIDI: ele transforma um `MelodyRequest` em um `CompositionPlan` formado por `NoteEvent`s. O `MidiExporter` é a única camada que usa Mido para converter esse plano em arquivo `.mid`.
 

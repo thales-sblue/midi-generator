@@ -6,6 +6,64 @@ produto final: cada incremento deve aproximar o sistema de análise,
 transformação, geração contextual e composição assistida, sem antecipar
 arquitetura que ainda não seja necessária.
 
+O produto é um agente/orquestrador musical: combina domínio e transformações
+próprias com bibliotecas maduras, modelos generativos locais e integração local
+com o Ableton. Não é objetivo reimplementar um DAW, uma biblioteca universal de
+teoria musical, um Transformer MIDI ou toda a Live API.
+
+## Restrições de produto e licenciamento
+
+- O runtime e a produção musical não podem depender de API comercial cobrada
+  por uso, inferência remota paga ou SaaS obrigatório. O uso externo do Codex
+  pelo plano do usuário não autoriza dependência da OpenAI API no projeto.
+- Pesos podem ser baixados inicialmente, mas a inferência deve funcionar
+  localmente e, depois do download, offline sempre que o backend permitir.
+- Toda dependência relevante exige avaliação separada da licença do código, dos
+  pesos e, quando aplicável, do dataset. Registre restrições `NonCommercial`,
+  condições de atribuição e qualquer incompatibilidade com lançamento,
+  monetização, distribuição, registro ou licenciamento de música.
+- Não presuma que “open source” autoriza uso comercial. Não torne padrão um
+  backend cujos pesos sejam `NonCommercial`; em particular, os pesos oficiais
+  atuais do MIDI-GPT sob `CC-BY-NC-4.0` não são elegíveis.
+- Registre toda avaliação no formato de `docs/DEPENDENCY_POLICY.md` antes de
+  integrar a dependência ao runtime. Dúvida de licença bloqueia integração, não
+  a auditoria ou uma POC isolada sem distribuição.
+
+## Integração antes de implementação
+
+Antes de criar uma capacidade, verifique se ela já existe de forma madura,
+gratuita, local e comercialmente utilizável. Se existir, avalie integração ou
+adaptação antes de escrever uma implementação própria. Uma dependência só entra
+quando resolve um problema musical ou operacional concreto; o projeto não deve
+virar uma coleção de dependências.
+
+- Preserve operações pequenas e claras no domínio próprio. Antes de ampliar
+  teoria musical substancialmente, avalie `music21`.
+- Considere MusPy para avaliação comparativa e MidiTok apenas quando treinamento
+  ou tokenização independente realmente exigirem; não os adicione por padrão.
+- Não expanda a bridge própria para grandes áreas novas do Live antes de avaliar
+  Ableton Live MCP e AbletonOSC. A hipótese preferencial é manter nossa camada
+  de segurança/orquestração sobre uma integração externa mais ampla.
+- Faça POC isolada e reproduzível antes de integrar ou substituir. Fixe versão,
+  checkpoint, licença, hardware, seed, entradas, parâmetros e outputs. Uma POC
+  bem-sucedida ainda exige equivalência automatizada e validação real no Live
+  antes de aposentar código funcional.
+
+## Geração e proveniência
+
+- Trate geração como backends desacoplados. O gerador atual permanece como
+  backend heurístico leve, determinístico, testável e sem GPU obrigatória; o core
+  não deve depender diretamente de um modelo específico.
+- Modelos locais especializados podem complementar o heurístico. Não integre
+  vários simultaneamente: prove primeiro um backend generativo útil no hardware
+  real.
+- Prepare cada fluxo para registrar backend, nome e versão do modelo, seed,
+  parâmetros, contexto MIDI, resultado gerado, transformações, versões
+  intermediárias e decisões humanas. Evolua contratos de integração por versão;
+  não quebre silenciosamente o `Integration Payload v1`.
+- Favoreça geração de alternativas, avaliação, seleção, transformação e edição
+  humana. Evite um fluxo opaco que trate a primeira geração como obra final.
+
 ## Limites das camadas
 
 - **Assistente/raciocínio:** interpreta linguagem natural e converte intenção em
@@ -43,20 +101,22 @@ Ao receber uma instrução curta para prosseguir:
 2. Procure pendências e validações manuais; execute a suíte completa antes de
    alterar código.
 3. Confirme o que já existe para não reimplementar capacidades.
-4. Escolha um único incremento coeso que avance a visão musical. Prefira a menor
+4. Pergunte explicitamente: “Estou criando algo que já existe de forma madura,
+   gratuita, local e comercialmente utilizável?”. Se sim, avalie integração.
+5. Escolha um único incremento coeso que avance a visão musical. Prefira a menor
    capacidade útil, reutilizável, determinística, independente do Ableton e
    testável isoladamente; evite prolongar infraestrutura sem benefício musical.
-5. Implemente o incremento na camada correta, crie/atualize testes e documentação
+6. Implemente o incremento na camada correta, crie/atualize testes e documentação
    e execute novamente `$env:PYTHONPATH = "src"; python -m pytest` (use o Python
    do `.venv` se necessário).
-6. Revise o próprio diff procurando regressões, destruição involuntária,
+7. Revise o próprio diff procurando regressões, destruição involuntária,
    duplicação e vazamento de responsabilidades; então crie um commit coeso.
-7. Ao encerrar, informe uma estimativa do avanço percentual obtido naquele
+8. Ao encerrar, informe uma estimativa do avanço percentual obtido naquele
    `continue` e do percentual ainda restante para concluir a primeira versão
    utilizável do assistente musical integrado ao Ableton. Trate os valores como
    estimativas de capacidade, não como medições exatas, e mantenha consistente o
    critério de conclusão entre ciclos.
-8. Depois que a suíte estiver validada, a revisão concluída e o commit criado com
+9. Depois que a suíte estiver validada, a revisão concluída e o commit criado com
    sucesso, publique o HEAD validado diretamente em `origin/main`, sem exigir
    branch intermediária ou pull request. Antes do push, atualize a referência do
    remoto e recuse atualizações que não sejam fast-forward. Confirme que o push
