@@ -37,7 +37,13 @@ A direção, a auditoria e as regras de admissão de dependências estão em:
 
 - [`docs/ARCHITECTURE_AUDIT.md`](docs/ARCHITECTURE_AUDIT.md);
 - [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md);
-- [`docs/POC_SKYTNT.md`](docs/POC_SKYTNT.md).
+- [`docs/POC_SKYTNT.md`](docs/POC_SKYTNT.md);
+- [`docs/POC_SKYTNT_RESULTS.md`](docs/POC_SKYTNT_RESULTS.md).
+
+A POC automática do SkyTNT passou localmente em CUDA, CPU e offline, mas o
+backend não foi integrado: a mesma seed diverge entre dispositivos/dtypes, os
+controles expressivos ainda são limitados e a qualidade musical aguarda escuta
+comparativa. O runtime permanece leve e exclusivamente heurístico.
 
 O core não dependerá de um modelo ou adapter de Ableton específico. A bridge
 atual permanece ativa e validada enquanto alternativas mais amplas não provarem

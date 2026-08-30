@@ -18,7 +18,9 @@ capacidade musical.
 
 Decisão deste ciclo: nenhuma refatoração de código. O menor incremento necessário
 é tornar permanentes as regras de admissão e registrar a fronteira futura de
-backends/proveniência. A próxima execução será uma POC isolada do SkyTNT.
+backends/proveniência. A POC isolada do SkyTNT foi executada depois desta
+auditoria; os resultados estão em `docs/POC_SKYTNT_RESULTS.md` e ainda não
+autorizam integração sem comparação auditiva.
 
 ## Mapa atual
 
@@ -158,9 +160,13 @@ adaptável ao domínio mais um manifesto. O core não importa PyTorch, tokenizer
 classes específicas do modelo. Falha ou ausência do backend generativo não
 remove a operação heurística existente.
 
-## Próximo experimento
+## Experimento generativo executado
 
 A POC SkyTNT foi escolhida porque testa a maior lacuna musical sem arriscar a
 integração Live já funcional. A auditoria Ableton já é suficiente para impedir
 expansão duplicada; migrar agora teria alto raio de regressão e menor ganho
-imediato. O protocolo e os gates da POC estão em `docs/POC_SKYTNT.md`.
+imediato. A matriz automática passou localmente em CUDA, CPU e offline, com
+determinismo dentro do mesmo dispositivo, mas divergência CPU/CUDA e controle
+expressivo limitado. O protocolo está em `docs/POC_SKYTNT.md`, e as evidências
+em `docs/POC_SKYTNT_RESULTS.md`. O próximo gate é escuta comparativa; até lá, o
+estado permanece `investigar` e não existe backend novo no runtime.

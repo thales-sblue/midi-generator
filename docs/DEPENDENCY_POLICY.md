@@ -51,7 +51,7 @@ um nome flutuante como `main` ou `latest` não é proveniência suficiente.
 
 | Candidato | Código | Pesos/dados | Uso comercial | Decisão atual |
 | --- | --- | --- | --- | --- |
-| SkyTNT/midi-model | Apache-2.0 | checkpoint `midi-model-tv2o-medium` marcado Apache-2.0; dataset declarado: Los Angeles/Monster MIDI, ainda exige revisão própria antes de treino | não há `NonCommercial` declarado no código ou no model card | POC isolada; não está no runtime |
+| SkyTNT/midi-model | Apache-2.0 | checkpoint `midi-model-tv2o-medium` marcado Apache-2.0; datasets declarados: Los Angeles MIDI, Monster MIDI e SymphonyNet, ainda exigem revisão própria antes de treino | não há `NonCommercial` declarado no código ou no model card | POC automática passou em CUDA/CPU/offline; investigar qualidade por escuta antes de integrar; não está no runtime |
 | EleutherAI/aria | Apache-2.0 | projeto declara modelos e MIDI tooling Apache-2.0; Aria-MIDI deve ser auditado separadamente se usado para treino | permitido pelos termos declarados, com risco de memorização apontado pelo próprio projeto | candidato futuro especializado em piano |
 | MIDI-GPT | código MIT | pesos oficiais `Metacreation/MIDI-GPT` sob CC-BY-NC-4.0; GigaMIDI é o dataset declarado | **incompatível** com backend comercial padrão | pesos rejeitados enquanto permanecerem NC |
 | wstierhout/ableton-live-mcp | MIT | sem pesos; opera sobre Live local | permitido pela licença do código | avaliar como adapter futuro; nenhuma migração agora |

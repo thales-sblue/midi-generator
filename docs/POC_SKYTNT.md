@@ -1,6 +1,10 @@
 # POC isolada — SkyTNT midi-model
 
-Status: planejada; **não executada** neste ciclo.
+Status: matriz automática executada em 30 de agosto de 2026; escuta humana
+pendente. Decisão atual: **investigar; não integrar ao runtime ainda**.
+
+Os resultados, hashes, medições, limitações e comandos reproduzíveis estão em
+[`POC_SKYTNT_RESULTS.md`](POC_SKYTNT_RESULTS.md).
 
 ## Hipótese
 
