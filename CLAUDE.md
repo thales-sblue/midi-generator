@@ -33,7 +33,7 @@ python -m venv .venv          # ou o python base indicado acima
 pip install -r requirements.txt
 ```
 
-Suíte de testes (259 testes; espelha o GitHub Actions):
+Suíte de testes (276 testes; espelha o GitHub Actions):
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -74,6 +74,7 @@ python -m midi_generator.ableton doctor
 | `src/midi_generator/domain/` | estruturas MIDI imutáveis, tabela de escalas (maior, menor, modos gregos, harmônica/melódica), requests, report — sem Mido/MCP/Live |
 | `src/midi_generator/generation/` | backend heurístico (`melody.py`) e geração contextual (`contextual.py`) |
 | `src/midi_generator/analysis/` | perfil objetivo de clip e ranking de compatibilidade (todas as escalas × 12 centros) |
+| `src/midi_generator/evaluation/` | seeds derivadas, proxies objetivos de score e ranking de candidatos (harness da lacuna #2 / gate de escuta) |
 | `src/midi_generator/transformations/` | transformações puras em ticks (transpose, invert, retrograde, quantize, legato, staccato, humanize, escala, diatônicas, velocity ramp) |
 | `src/midi_generator/integration/` | conversão beats/ticks e `Integration Payload v1` (JSON-safe, `schema_version = 1`) |
 | `src/midi_generator/exporters/` | `MidiExporter` — única camada que usa Mido |

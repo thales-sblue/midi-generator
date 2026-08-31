@@ -5,6 +5,8 @@ from pathlib import Path
 
 from .domain import TimeSignature
 from .domain.music_theory import SCALE_INTERVALS
+from .evaluation import evaluate_request
+from .exporters import MidiExporter
 from .generator import GenerationConfig, generate_midi
 
 
@@ -20,17 +22,50 @@ def main() -> None:
         default="4/4",
         help="Meter such as 4/4, 3/4 or 6/8 (default: 4/4).",
     )
+    parser.add_argument(
+        "--candidates",
+        type=int,
+        default=None,
+        help=(
+            "Generate N candidates from seeds derived from --seed, score them "
+            "and write one ranked MIDI file per candidate."
+        ),
+    )
     parser.add_argument("--output", default="output/melody.mid")
     args = parser.parse_args()
     try:
         time_signature = TimeSignature.parse(args.time_signature)
     except ValueError as error:
         parser.error(str(error))
-    path = generate_midi(
-        GenerationConfig(args.bpm, args.root, args.scale, args.bars, args.seed, time_signature),
-        args.output,
+    if args.candidates is not None and args.candidates < 1:
+        parser.error("--candidates must be at least 1.")
+
+    if args.candidates is None:
+        path = generate_midi(
+            GenerationConfig(
+                args.bpm, args.root, args.scale, args.bars, args.seed, time_signature
+            ),
+            args.output,
+        )
+        print(f"MIDI created: {Path(path).resolve()}")
+        return
+
+    request = GenerationConfig(
+        args.bpm, args.root, args.scale, args.bars, args.seed, time_signature
     )
-    print(f"MIDI created: {Path(path).resolve()}")
+    ranked = evaluate_request(request, args.candidates)
+    stem = Path(args.output)
+    exporter = MidiExporter()
+    for candidate in ranked:
+        destination = stem.with_name(
+            f"{stem.stem}_rank{candidate.rank:02d}_seed{candidate.seed}{stem.suffix}"
+        )
+        exporter.export(candidate.plan, destination)
+        print(
+            f"rank {candidate.rank:>2}  seed {candidate.seed:<12}  "
+            f"score {candidate.score.aggregate:.3f}  "
+            f"{Path(destination).resolve()}"
+        )
 
 
 if __name__ == "__main__":

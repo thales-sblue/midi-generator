@@ -4,7 +4,7 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 31/08/2026 — Ciclo 3 (compassos variáveis).
+Última atualização: 31/08/2026 — Ciclo 4 (harness de avaliação/seleção).
 
 ## Escopo do v1
 
@@ -34,7 +34,16 @@ clips apenas.
   (`--time-signature`). O gerador heurístico exige compasso alinhado à grade de
   colcheias. A bridge Ableton continua recusando ≠ 4/4 (`UNSUPPORTED_TIME_SIGNATURE`)
   (Ciclo 3).
-- Suíte: 259 testes verdes.
+- Avaliação/seleção: módulo `evaluation/` — `derive_seeds` (seeds derivadas
+  bit-exatas só de `random.Random(base)`), `score_profile`/`score_plan` (quatro
+  proxies objetivos em `0..1`: entropia de movimento, cobertura de classes de
+  altura, atividade rítmica, controle de saltos; agregado v0 = média simples),
+  `rank_candidates`/`evaluate_request` (ranking por agregado, desempate por seed)
+  e CLI `--candidates N` (um `.mid` ranqueado por candidato). Backend-agnóstico:
+  aceita um callable `MelodyRequest -> CompositionPlan` (ex.: closure sobre
+  `generate_contextual_plan`). Reusa `analyze_clip`; sem dependência nova
+  (Ciclo 4).
+- Suíte: 276 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -60,8 +69,9 @@ escrita no piano roll do Live. Registrar evidência real aqui ao validar.
 
 POC isolada executada (`POC_SKYTNT_RESULTS.md`); passou em CUDA/CPU/offline.
 Bloqueado em escuta cega comparativa vs variações contextuais de duração
-equivalente. Rodar de preferência pelo harness de avaliação (Ciclo 4). Até lá:
-`investigar`, sem backend no runtime.
+equivalente. O harness de avaliação (`evaluation/`, Ciclo 4) já existe e é o
+instrumento para gerar e ranquear os candidatos da escuta; a escuta cega em si
+continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
 
 ## Decisões em aberto
 
@@ -87,15 +97,17 @@ equivalente. Rodar de preferência pelo harness de avaliação (Ciclo 4). Até l
   (`--time-signature`). Grade de colcheias exigida pelo heurístico; bridge
   Ableton segue recusando ≠ 4/4. `tests/test_time_signature.py` (40 testes).
   Payload v1 intacto (string).
-1. **Ciclo 4 — Harness de avaliação/seleção (lacuna #2).** Módulo `evaluation/`:
-   N candidatos (seeds derivadas) + pontuação objetiva + ranking. Também é o
-   instrumento do gate de escuta.
-2. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
+- [x] **Ciclo 4 — Harness de avaliação/seleção (lacuna #2).** Módulo
+  `evaluation/`: `derive_seeds`, `score_profile`/`score_plan` (quatro proxies
+  objetivos + agregado v0), `rank_candidates`/`evaluate_request`, CLI
+  `--candidates N`. Backend-agnóstico, reusa `analyze_clip`, sem dependência
+  nova. `tests/test_evaluation.py` (17 testes). Payload v1 intacto.
+1. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
    dict versionado (backend + versão, seed, params, hash do contexto e do output,
    timestamp) ao lado do Payload v1, nunca dentro.
-3. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
+2. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.
-4. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
+3. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.

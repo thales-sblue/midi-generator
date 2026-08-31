@@ -50,6 +50,34 @@ reproduzível. Modelos locais só serão adicionados como backends
 opcionais depois de POC de licença, hardware, qualidade e determinismo; o projeto
 não inclui IA generativa no runtime atual.
 
+## Avaliação e seleção de candidatos
+
+O módulo `midi_generator.evaluation` gera várias alternativas a partir de uma
+única requisição e as ranqueia por métricas objetivas, para escolha humana — ele
+não transforma um score ambíguo em vencedor automático.
+
+- `derive_seeds(base_seed, count)` produz `count` seeds distintas derivadas
+  apenas de `random.Random(base_seed)`, portanto bit-exatas e independentes do
+  estado global.
+- `score_profile` / `score_plan` medem quatro proxies objetivos, cada um em
+  `0.0..1.0`: entropia do movimento da voz superior, cobertura de classes de
+  altura, atividade rítmica na grade de colcheias e controle de saltos. O
+  agregado v0 é a média simples dos quatro e deve evoluir.
+- `evaluate_request(request, count, backend=generate_plan)` deriva as seeds,
+  gera os candidatos e devolve `RankedCandidate`s ordenados pelo agregado, com
+  desempate determinístico pela seed. O `backend` é qualquer callable
+  `MelodyRequest -> CompositionPlan` (por exemplo, uma closure sobre
+  `generate_contextual_plan`), então o harness também é o instrumento repetível
+  do gate de escuta.
+
+Pela CLI, `--candidates N` grava um `.mid` ranqueado por candidato
+(`<saída>_rankNN_seed<seed>.mid`) e imprime a tabela de scores:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --candidates 5 --output output/example.mid
+```
+
 O projeto inclui uma ponte opcional para Ableton Live 12 Lite. O motor, a exportação MIDI e `generate_melody` continuam funcionando normalmente sem Ableton; somente as operações descritas na seção "Ableton Live" exigem que o Live esteja aberto e com o Remote Script ativo.
 
 ## Arquitetura
