@@ -19,6 +19,14 @@ class MidiExporter:
         midi.tracks.append(track)
         track.append(MetaMessage("track_name", name="Generated Melody", time=0))
         track.append(MetaMessage("set_tempo", tempo=bpm2tempo(plan.request.bpm), time=0))
+        track.append(
+            MetaMessage(
+                "time_signature",
+                numerator=plan.request.time_signature.numerator,
+                denominator=plan.request.time_signature.denominator,
+                time=0,
+            )
+        )
         track.append(Message("program_change", program=0, channel=0, time=0))
 
         cursor = 0

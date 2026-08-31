@@ -29,18 +29,24 @@ pip install -r requirements.txt
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --output output/example.mid
+python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --time-signature 6/8 --output output/example.mid
 ```
 
-Os parâmetros são BPM, nota raiz, escala, número de compassos e seed. As escalas
-disponíveis são `major` e `minor` (menor natural), os sete modos gregos
-(`major`/Jônio, `dorian`, `phrygian`, `lydian`, `mixolydian`, `minor`/Eólio,
-`locrian`) e `harmonic_minor` e `melodic_minor`. A mesma configuração produz
-exatamente os mesmos eventos MIDI.
+Os parâmetros são BPM, nota raiz, escala, número de compassos, seed e assinatura
+de tempo. As escalas disponíveis são `major` e `minor` (menor natural), os sete
+modos gregos (`major`/Jônio, `dorian`, `phrygian`, `lydian`, `mixolydian`,
+`minor`/Eólio, `locrian`) e `harmonic_minor` e `melodic_minor`. A mesma
+configuração produz exatamente os mesmos eventos MIDI.
 
-O gerador heurístico usa uma grade de colcheias em 4/4, inclui pausas, varia
-velocity e limita todas as alturas à escala escolhida. Ele permanecerá como
-backend leve e reproduzível. Modelos locais só serão adicionados como backends
+`--time-signature` aceita qualquer `numerador/denominador` com denominador em
+`1, 2, 4, 8, 16` cujo compasso caiba num número inteiro de colcheias (ex.: `4/4`,
+`3/4`, `6/8`, `12/8`); o padrão é `4/4`. A assinatura viaja nos metadados do
+Integration Payload v1 e num MetaMessage `time_signature` do arquivo `.mid`. A
+ponte para o Ableton Live continua aceitando apenas `4/4`.
+
+O gerador heurístico usa uma grade de colcheias, inclui pausas, varia velocity e
+limita todas as alturas à escala escolhida. Ele permanecerá como backend leve e
+reproduzível. Modelos locais só serão adicionados como backends
 opcionais depois de POC de licença, hardware, qualidade e determinismo; o projeto
 não inclui IA generativa no runtime atual.
 

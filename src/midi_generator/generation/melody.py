@@ -2,13 +2,31 @@
 
 import random
 
-from midi_generator.domain import CompositionPlan, GenerationReport, MelodyRequest, NoteEvent
+from midi_generator.domain import (
+    CompositionPlan,
+    GenerationReport,
+    MelodyRequest,
+    NoteEvent,
+    TimeSignature,
+)
 from midi_generator.domain.music_theory import ROOT_NOTES, SCALE_INTERVALS
 from midi_generator.validation.musical_validation import validate_plan
 
 TICKS_PER_BEAT = 480
 BEATS_PER_BAR = 4
 STEP_TICKS = TICKS_PER_BEAT // 2
+
+
+def grid_bar_ticks(time_signature: TimeSignature) -> int:
+    """Bar length in ticks, constrained to the generator's eighth-note grid."""
+    bar_ticks = time_signature.bar_ticks(TICKS_PER_BEAT)
+    if bar_ticks % STEP_TICKS:
+        raise ValueError(
+            f"Time signature {time_signature} does not align to the eighth-note "
+            "grid used by the heuristic generator."
+        )
+    return bar_ticks
+
 
 def scale_notes(root_note: str, scale: str) -> tuple[int, ...]:
     root = 60 + ROOT_NOTES[root_note.upper()]
@@ -26,7 +44,8 @@ def generate_plan(request: MelodyRequest) -> CompositionPlan:
 
     rng = random.Random(request.seed)
     pitches = scale_notes(request.root_note, request.scale)
-    total_ticks = request.bars * BEATS_PER_BAR * TICKS_PER_BEAT
+    bar_ticks = grid_bar_ticks(request.time_signature)
+    total_ticks = request.bars * bar_ticks
     position = 0
     pauses = 0
     notes: list[NoteEvent] = []
@@ -48,7 +67,10 @@ def generate_plan(request: MelodyRequest) -> CompositionPlan:
         notes=tuple(notes),
         total_duration_ticks=total_ticks,
         report=report,
-        metadata={"time_signature": "4/4", "ticks_per_beat": TICKS_PER_BEAT},
+        metadata={
+            "time_signature": str(request.time_signature),
+            "ticks_per_beat": TICKS_PER_BEAT,
+        },
     )
     validate_plan(plan)
     return plan

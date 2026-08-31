@@ -8,12 +8,13 @@ from midi_generator.domain import (
     GenerationReport,
     MelodyRequest,
     NoteEvent,
+    TimeSignature,
 )
 from midi_generator.domain.music_theory import ROOT_NOTES, SCALE_INTERVALS
 from midi_generator.transformations import EditableMidiClip
 from midi_generator.validation.musical_validation import validate_plan
 
-from .melody import BEATS_PER_BAR, STEP_TICKS, TICKS_PER_BEAT
+from .melody import BEATS_PER_BAR, STEP_TICKS, TICKS_PER_BEAT, grid_bar_ticks
 
 DURATION_SEED_SALT = 0x4455524154494F4E
 
@@ -34,13 +35,14 @@ def generate_contextual_plan(
         raise ValueError("Reference clip must contain at least one sounding note.")
     reference_onsets = tuple(sorted({note.start for note in sounding}))
 
-    total_ticks = request.bars * BEATS_PER_BAR * TICKS_PER_BEAT
+    total_ticks = request.bars * grid_bar_ticks(request.time_signature)
     step_count = total_ticks // STEP_TICKS
     requested_note_count = _target_note_count(
         len(reference_onsets),
         reference.length_ticks,
         reference.ticks_per_beat,
         request.bars,
+        request.time_signature,
     )
     target_note_count = min(max(requested_note_count, 1), step_count)
     warnings = ()
@@ -54,7 +56,7 @@ def generate_contextual_plan(
     rng = random.Random(request.seed)
     duration_rng = random.Random(request.seed ^ DURATION_SEED_SALT)
     phase_weights = _onset_phase_weights(
-        reference_onsets, reference.ticks_per_beat
+        reference_onsets, reference.ticks_per_beat, request.time_signature
     )
     selected_steps = _sample_contextual_steps(
         rng, step_count, target_note_count, phase_weights
@@ -112,7 +114,7 @@ def generate_contextual_plan(
         total_duration_ticks=total_ticks,
         report=report,
         metadata={
-            "time_signature": "4/4",
+            "time_signature": str(request.time_signature),
             "ticks_per_beat": TICKS_PER_BEAT,
             "generation_mode": "contextual",
             "reference_note_count": len(sounding),
@@ -136,20 +138,21 @@ def _target_note_count(
     reference_length_ticks: int,
     reference_ticks_per_beat: int,
     target_bars: int,
+    target_time_signature: TimeSignature,
 ) -> int:
-    numerator = (
-        reference_onset_count
-        * reference_ticks_per_beat
-        * target_bars
-        * BEATS_PER_BAR
+    target_ticks_in_reference_units = target_bars * target_time_signature.bar_ticks(
+        reference_ticks_per_beat
     )
+    numerator = reference_onset_count * target_ticks_in_reference_units
     return _round_half_up(numerator, reference_length_ticks)
 
 
 def _onset_phase_weights(
-    onsets: tuple[int, ...], ticks_per_beat: int
+    onsets: tuple[int, ...],
+    ticks_per_beat: int,
+    target_time_signature: TimeSignature,
 ) -> tuple[int, ...]:
-    steps_per_bar = BEATS_PER_BAR * TICKS_PER_BEAT // STEP_TICKS
+    steps_per_bar = target_time_signature.bar_ticks(TICKS_PER_BEAT) // STEP_TICKS
     bar_ticks = BEATS_PER_BAR * ticks_per_beat
     weights = [0] * steps_per_bar
     for onset in onsets:

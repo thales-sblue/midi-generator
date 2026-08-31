@@ -4,7 +4,7 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 30/08/2026 — Ciclo 2 (escalas e modos).
+Última atualização: 31/08/2026 — Ciclo 3 (compassos variáveis).
 
 ## Escopo do v1
 
@@ -27,7 +27,14 @@ clips apenas.
 - Escalas: `major`, `minor` e mais os 7 modos gregos + `harmonic_minor` +
   `melodic_minor`, propagados por geração, contextual, análise e transformações
   diatônicas (Ciclo 2).
-- Suíte: 219 testes verdes.
+- Compassos: `TimeSignature` (`numerator/denominator`, denominador em
+  1/2/4/8/16) no domínio; `MelodyRequest.time_signature` (default `4/4`)
+  propagado por `generate_plan`, `generate_contextual_plan`, metadados do
+  Payload v1, `MidiExporter` (MetaMessage `time_signature`) e a CLI
+  (`--time-signature`). O gerador heurístico exige compasso alinhado à grade de
+  colcheias. A bridge Ableton continua recusando ≠ 4/4 (`UNSUPPORTED_TIME_SIGNATURE`)
+  (Ciclo 3).
+- Suíte: 259 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -74,15 +81,21 @@ equivalente. Rodar de preferência pelo harness de avaliação (Ciclo 4). Até l
   por `generate_plan`, `generate_contextual_plan`, `constrain_to_scale`,
   `transpose_diatonic`, `harmonize_diatonic`, `rank_scale_candidates` e a CLI.
   `tests/test_scales.py` (15 testes). Payload v1 intacto.
-1. **Ciclo 3 — Compassos 3/4 e 6/8.** Assinatura de tempo variável no domínio
-   (`BEATS_PER_BAR` deixa de ser constante). Payload v1 já carrega
-   `time_signature`. Bridge segue recusando ≠ 4/4 até validação manual.
-2. **Ciclo 4 — Harness de avaliação/seleção (lacuna #2).** Módulo `evaluation/`:
+- [x] **Ciclo 3 — Compassos variáveis.** `TimeSignature` no domínio;
+  `MelodyRequest.time_signature` (default `4/4`) propagado por `generate_plan`,
+  `generate_contextual_plan`, metadados do Payload v1, `MidiExporter` e a CLI
+  (`--time-signature`). Grade de colcheias exigida pelo heurístico; bridge
+  Ableton segue recusando ≠ 4/4. `tests/test_time_signature.py` (40 testes).
+  Payload v1 intacto (string).
+1. **Ciclo 4 — Harness de avaliação/seleção (lacuna #2).** Módulo `evaluation/`:
    N candidatos (seeds derivadas) + pontuação objetiva + ranking. Também é o
    instrumento do gate de escuta.
-3. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
+2. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
    dict versionado (backend + versão, seed, params, hash do contexto e do output,
    timestamp) ao lado do Payload v1, nunca dentro.
-4. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
+3. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.
+4. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
+   do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
+   incremento próprio.
