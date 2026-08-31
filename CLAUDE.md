@@ -71,9 +71,9 @@ python -m midi_generator.ableton doctor
 
 | Caminho | Papel |
 | --- | --- |
-| `src/midi_generator/domain/` | estruturas MIDI imutáveis, teoria maior/menor, requests, report — sem Mido/MCP/Live |
+| `src/midi_generator/domain/` | estruturas MIDI imutáveis, tabela de escalas (maior, menor, modos gregos, harmônica/melódica), requests, report — sem Mido/MCP/Live |
 | `src/midi_generator/generation/` | backend heurístico (`melody.py`) e geração contextual (`contextual.py`) |
-| `src/midi_generator/analysis/` | perfil objetivo de clip e compatibilidade com 24 escalas |
+| `src/midi_generator/analysis/` | perfil objetivo de clip e ranking de compatibilidade (todas as escalas × 12 centros) |
 | `src/midi_generator/transformations/` | transformações puras em ticks (transpose, invert, retrograde, quantize, legato, staccato, humanize, escala, diatônicas, velocity ramp) |
 | `src/midi_generator/integration/` | conversão beats/ticks e `Integration Payload v1` (JSON-safe, `schema_version = 1`) |
 | `src/midi_generator/exporters/` | `MidiExporter` — única camada que usa Mido |

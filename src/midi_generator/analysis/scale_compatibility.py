@@ -1,4 +1,4 @@
-"""Deterministic compatibility ranking for major and minor scales."""
+"""Deterministic compatibility ranking across every scale in SCALE_INTERVALS."""
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
@@ -22,7 +22,9 @@ class ScaleCandidate:
 
 
 def rank_scale_candidates(clip: EditableMidiClip) -> tuple[ScaleCandidate, ...]:
-    """Rank all 24 major/minor scales by note coverage and tonic evidence."""
+    """Rank every scale in SCALE_INTERVALS over the 12 roots by note coverage
+    and tonic evidence. The tie-break keeps SCALE_INTERVALS insertion order, so
+    ``major`` and ``minor`` still outrank the other modes on equal evidence."""
     clip.validate()
     pitch_classes = tuple(note.pitch % 12 for note in clip.notes if not note.mute)
     if not pitch_classes:
@@ -30,7 +32,7 @@ def rank_scale_candidates(clip: EditableMidiClip) -> tuple[ScaleCandidate, ...]:
 
     candidates: list[tuple[int, int, int, int, ScaleCandidate]] = []
     for root_pitch_class, root_note in enumerate(PITCH_CLASS_NAMES):
-        for mode_order, scale in enumerate(("major", "minor")):
+        for mode_order, scale in enumerate(SCALE_INTERVALS):
             allowed = {
                 (root_pitch_class + interval) % 12
                 for interval in SCALE_INTERVALS[scale]

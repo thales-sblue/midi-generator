@@ -26,7 +26,7 @@ def generate_contextual_plan(
     if request.root_note.upper() not in ROOT_NOTES:
         raise ValueError("Root note must be one of C, C#, Db, D, etc.")
     if request.scale.lower() not in SCALE_INTERVALS:
-        raise ValueError("Scale must be 'major' or 'minor'.")
+        raise ValueError(f"Scale must be one of: {', '.join(SCALE_INTERVALS)}.")
     reference.validate()
 
     sounding = tuple(note for note in reference.notes if not note.mute)

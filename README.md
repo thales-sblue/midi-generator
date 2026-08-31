@@ -32,7 +32,11 @@ $env:PYTHONPATH = "src"
 python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --output output/example.mid
 ```
 
-Os parâmetros são BPM, nota raiz, escala (`major` ou `minor`), número de compassos e seed. A mesma configuração produz exatamente os mesmos eventos MIDI.
+Os parâmetros são BPM, nota raiz, escala, número de compassos e seed. As escalas
+disponíveis são `major` e `minor` (menor natural), os sete modos gregos
+(`major`/Jônio, `dorian`, `phrygian`, `lydian`, `mixolydian`, `minor`/Eólio,
+`locrian`) e `harmonic_minor` e `melodic_minor`. A mesma configuração produz
+exatamente os mesmos eventos MIDI.
 
 O gerador heurístico usa uma grade de colcheias em 4/4, inclui pausas, varia
 velocity e limita todas as alturas à escala escolhida. Ele permanecerá como
@@ -97,9 +101,11 @@ em vez de serem inventados como zero. Notas mutadas são contabilizadas, mas nã
 influenciam as métricas musicais. A análise é pura, imutável e reutiliza
 `EditableMidiClip`, sem Live API, MCP ou Mido.
 
-O perfil também classifica as 24 escalas maior/menor por cobertura das notas
-audíveis e, em empate, pela quantidade de ocorrências da tônica. Cada candidato
-informa `matching_note_count`, `tonic_note_count` e `coverage`. O resultado é
+O perfil também classifica todas as escalas conhecidas (hoje 9) nos 12 centros
+tonais — 108 candidatos — por cobertura das notas audíveis e, em empate, pela
+quantidade de ocorrências da tônica e pela ordem da tabela de escalas (`major` e
+`minor` primeiro). Cada candidato informa `matching_note_count`,
+`tonic_note_count` e `coverage`. O resultado é
 deliberadamente apresentado como compatibilidade: clips curtos e escalas
 relativas podem ter evidência idêntica, portanto o motor não inventa uma
 tonalidade única quando os dados não permitem distingui-la.
@@ -576,8 +582,9 @@ track:
 
 `constrain_to_scale` mantém notas já pertencentes à escala e move cada nota
 externa para a altura permitida mais próxima entre `0..127`. Empates escolhem a
-altura inferior, evitando deriva melódica para cima. Aceita as mesmas raízes e
-escalas `major` e `minor` usadas pelo gerador e é idempotente: reaplicar a mesma
+altura inferior, evitando deriva melódica para cima. Aceita as mesmas raízes e o
+mesmo conjunto de escalas do gerador (`major`, `minor`, os modos gregos,
+`harmonic_minor` e `melodic_minor`) e é idempotente: reaplicar a mesma
 tonalidade não muda novamente o clip.
 
 Status da integração Live para `constrain_to_scale`: **PENDENTE DE VALIDAÇÃO

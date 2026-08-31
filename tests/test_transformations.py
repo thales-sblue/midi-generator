@@ -260,7 +260,7 @@ def test_constrain_to_scale_uses_downward_tie_break_and_respects_midi_edges():
 def test_constrain_to_scale_rejects_unknown_tonality_without_mutating_input():
     clip = make_clip(NoteEvent(61, 0, 120, 90))
 
-    for root_note, scale, message in [("H", "major", "root_note"), ("C", "dorian", "scale")]:
+    for root_note, scale, message in [("H", "major", "root_note"), ("C", "wurlitzer", "scale")]:
         try:
             constrain_to_scale(clip, root_note, scale)
         except ValueError as error:

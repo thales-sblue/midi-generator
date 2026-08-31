@@ -4,7 +4,7 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 30/08/2026 — Ciclo 1 (re-baseline pós-migração Codex → Claude).
+Última atualização: 30/08/2026 — Ciclo 2 (escalas e modos).
 
 ## Escopo do v1
 
@@ -16,21 +16,25 @@ clips apenas.
 ## Feito
 
 - Domínio: `NoteEvent`, `MelodyRequest`, `CompositionPlan`, `GenerationReport`;
-  teoria maior/menor.
+  tabela de escalas.
 - Geração: backend heurístico determinístico; `generate_contextual_plan`
   (ritmo/pitch/movimento/duração/velocity herdados de um clip de referência).
-- Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade com 24
-  escalas.
+- Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
+  todas as escalas × 12 centros (108 candidatos hoje).
 - Transformações puras (ticks, 480 tpb): transpose, invert, retrograde, quantize,
   legato, staccato, humanize, constrain_to_scale, transpose_diatonic,
   harmonize_diatonic, velocity_ramp.
+- Escalas: `major`, `minor` e mais os 7 modos gregos + `harmonic_minor` +
+  `melodic_minor`, propagados por geração, contextual, análise e transformações
+  diatônicas (Ciclo 2).
+- Suíte: 219 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
   Ableton e orquestração segura; teste de subprocesso real.
 - Bridge Ableton: Remote Script + socket JSON/TCP `127.0.0.1:20812`, fingerprint
   SHA-256, `CLIP_CHANGED`.
-- Suíte: 204 testes verdes (`--basetemp=.pytest-tmp` nesta máquina).
+- Suíte roda com `--basetemp=.pytest-tmp` nesta máquina.
 - Validado manualmente no Live 12.4.5: geração, edição, duplicação protegida e
   transpose, invert, retrograde, quantize, humanize, legato, staccato.
 
@@ -66,17 +70,19 @@ equivalente. Rodar de preferência pelo harness de avaliação (Ciclo 4). Até l
 
 ## Fila de incrementos (revisável)
 
-1. **Ciclo 2 — Escalas e modos.** Ampliar `SCALE_INTERVALS` (modos gregos, menor
-   harmônica/melódica, escalas comuns); propagar por `generate_plan`,
-   `generate_contextual_plan`, `constrain_to_scale`, `transpose_diatonic`,
-   `harmonize_diatonic`, `rank_scale_candidates`. Testes por escala. Sem quebrar
-   Payload v1.
-2. **Ciclo 3 — Compassos 3/4 e 6/8.** Assinatura de tempo variável no domínio
+- [x] **Ciclo 2 — Escalas e modos.** `SCALE_INTERVALS` com 9 escalas; propagado
+  por `generate_plan`, `generate_contextual_plan`, `constrain_to_scale`,
+  `transpose_diatonic`, `harmonize_diatonic`, `rank_scale_candidates` e a CLI.
+  `tests/test_scales.py` (15 testes). Payload v1 intacto.
+1. **Ciclo 3 — Compassos 3/4 e 6/8.** Assinatura de tempo variável no domínio
    (`BEATS_PER_BAR` deixa de ser constante). Payload v1 já carrega
    `time_signature`. Bridge segue recusando ≠ 4/4 até validação manual.
-3. **Ciclo 4 — Harness de avaliação/seleção (lacuna #2).** Módulo `evaluation/`:
+2. **Ciclo 4 — Harness de avaliação/seleção (lacuna #2).** Módulo `evaluation/`:
    N candidatos (seeds derivadas) + pontuação objetiva + ranking. Também é o
    instrumento do gate de escuta.
-4. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
+3. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
    dict versionado (backend + versão, seed, params, hash do contexto e do output,
    timestamp) ao lado do Payload v1, nunca dentro.
+4. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
+   mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
+   `harmonize_diatonic` antes.

@@ -62,7 +62,7 @@ def test_tool_handler_is_deterministic_for_same_input_and_seed():
     [
         ("bpm", 10, "BPM must be between 20 and 400"),
         ("root_note", "H", "Root note must be"),
-        ("scale", "dorian", "Scale must be 'major' or 'minor'"),
+        ("scale", "wurlitzer", "Scale must be one of"),
         ("bars", 0, "Bars must be at least 1"),
     ],
 )

@@ -262,7 +262,7 @@ def _scale_definition(root_note: str, scale: str) -> tuple[int, tuple[int, ...]]
     if not isinstance(root_note, str) or root_note.upper() not in ROOT_NOTES:
         raise ValueError("root_note must be one of C, C#, Db, D, etc.")
     if not isinstance(scale, str) or scale.lower() not in SCALE_INTERVALS:
-        raise ValueError("scale must be 'major' or 'minor'.")
+        raise ValueError(f"scale must be one of: {', '.join(SCALE_INTERVALS)}.")
     return ROOT_NOTES[root_note.upper()], SCALE_INTERVALS[scale.lower()]
 
 

@@ -136,16 +136,19 @@ def test_scale_candidates_rank_coverage_then_tonic_evidence():
 
     candidates = rank_scale_candidates(clip)
 
-    assert len(candidates) == 24
+    # 12 roots x every scale in SCALE_INTERVALS (9 today).
+    assert len(candidates) == 108
+    # Coverage wins first: C major covers all eight notes and has the strongest
+    # tonic evidence (two C's), so it ranks ahead of every relative mode.
     assert candidates[0].root_note == "C"
     assert candidates[0].scale == "major"
     assert candidates[0].matching_note_count == 8
     assert candidates[0].tonic_note_count == 2
     assert candidates[0].coverage == 1.0
-    assert candidates[1].root_note == "A"
-    assert candidates[1].scale == "minor"
+    # The next candidate still covers everything but has weaker tonic evidence.
     assert candidates[1].matching_note_count == 8
     assert candidates[1].coverage == 1.0
+    assert candidates[1].tonic_note_count == 1
 
 
 def test_scale_ranking_is_deterministic_and_ignores_muted_notes():

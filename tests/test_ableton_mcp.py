@@ -229,7 +229,7 @@ def test_analyze_clip_tool_reads_without_mutating_ableton(monkeypatch):
     assert result["profile"]["pitch_class_histogram"][0] == 1
     assert result["profile"]["melodic_interval_count"] == 0
     assert result["profile"]["ascending_motion_count"] == 0
-    assert len(result["profile"]["scale_candidates"]) == 24
+    assert len(result["profile"]["scale_candidates"]) == 108
     assert result["profile"]["scale_candidates"][0]["coverage"] == 1.0
 
 

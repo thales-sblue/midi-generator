@@ -47,7 +47,7 @@ def test_velocity_and_pauses_are_generated():
 @pytest.mark.parametrize("config", [
     GenerationConfig(10, "C", "major", 1, 1),
     GenerationConfig(120, "H", "major", 1, 1),
-    GenerationConfig(120, "C", "dorian", 1, 1),
+    GenerationConfig(120, "C", "wurlitzer", 1, 1),
     GenerationConfig(120, "C", "major", 0, 1),
 ])
 def test_invalid_config_is_rejected(config):
