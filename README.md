@@ -78,6 +78,23 @@ $env:PYTHONPATH = "src"
 python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --candidates 5 --output output/example.mid
 ```
 
+## Proveniência
+
+`midi_generator.provenance.build_manifest` produz um manifesto de proveniência
+v0 — backend e versão, seed, parâmetros musicais, hash SHA-256 do contexto de
+entrada (só na geração contextual), hash da saída e um timestamp ISO 8601
+fornecido pelo chamador. Ele acompanha o `Integration Payload v1` num schema
+próprio (`provenance_schema_version`) e **nunca é embutido no payload**. Detalhe
+em [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+
+Pela CLI, `--provenance` grava `<saída>.provenance.json` ao lado de cada `.mid`
+(um por candidato quando combinado com `--candidates`):
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --provenance --output output/example.mid
+```
+
 O projeto inclui uma ponte opcional para Ableton Live 12 Lite. O motor, a exportação MIDI e `generate_melody` continuam funcionando normalmente sem Ableton; somente as operações descritas na seção "Ableton Live" exigem que o Live esteja aberto e com o Remote Script ativo.
 
 ## Arquitetura
@@ -87,7 +104,8 @@ A direção, a auditoria e as regras de admissão de dependências estão em:
 - [`docs/ARCHITECTURE_AUDIT.md`](docs/ARCHITECTURE_AUDIT.md);
 - [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md);
 - [`docs/POC_SKYTNT.md`](docs/POC_SKYTNT.md);
-- [`docs/POC_SKYTNT_RESULTS.md`](docs/POC_SKYTNT_RESULTS.md).
+- [`docs/POC_SKYTNT_RESULTS.md`](docs/POC_SKYTNT_RESULTS.md);
+- [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
 
 A POC automática do SkyTNT passou localmente em CUDA, CPU e offline, mas o
 backend não foi integrado: a mesma seed diverge entre dispositivos/dtypes, os

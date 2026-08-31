@@ -4,7 +4,7 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 31/08/2026 — Ciclo 4 (harness de avaliação/seleção).
+Última atualização: 31/08/2026 — Ciclo 5 (manifesto de proveniência v0).
 
 ## Escopo do v1
 
@@ -43,7 +43,13 @@ clips apenas.
   aceita um callable `MelodyRequest -> CompositionPlan` (ex.: closure sobre
   `generate_contextual_plan`). Reusa `analyze_clip`; sem dependência nova
   (Ciclo 4).
-- Suíte: 276 testes verdes.
+- Proveniência: módulo `provenance/` — `build_manifest` gera o manifesto v0
+  (`provenance_schema_version = 1`): backend + versão, seed, parâmetros, hash
+  SHA-256 do contexto (só contextual) e da saída, timestamp ISO 8601 injetado
+  pelo chamador. Schema próprio, ao lado do Payload v1 e nunca dentro dele;
+  `validate_manifest` checa a estrutura. CLI `--provenance` grava
+  `<saída>.provenance.json`. `docs/PROVENANCE.md`. (Ciclo 5).
+- Suíte: 294 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -102,12 +108,15 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   objetivos + agregado v0), `rank_candidates`/`evaluate_request`, CLI
   `--candidates N`. Backend-agnóstico, reusa `analyze_clip`, sem dependência
   nova. `tests/test_evaluation.py` (17 testes). Payload v1 intacto.
-1. **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo `provenance/`:
-   dict versionado (backend + versão, seed, params, hash do contexto e do output,
-   timestamp) ao lado do Payload v1, nunca dentro.
-2. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
+- [x] **Ciclo 5 — Manifesto de proveniência v0 (lacuna #3).** Módulo
+  `provenance/`: `ProvenanceManifest` + `build_manifest` + `validate_manifest`
+  (backend + versão, seed, params, `context_hash`/`output_hash` SHA-256,
+  `generated_at` injetado). Schema próprio versionado, ao lado do Payload v1 e
+  nunca dentro. CLI `--provenance`. `tests/test_provenance.py` (18 testes).
+  `docs/PROVENANCE.md`. Payload v1 intacto.
+1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.
-3. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
+2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
