@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 01/09/2026 — Ciclo 8 (API de escala compartilhada no
-domínio).
+Última atualização: 01/09/2026 — Ciclo 9 (gerador de baixo diatônico que segue
+a linha de fundamentais de um clip de referência).
 
 ## Escopo do v1
 
@@ -21,7 +21,15 @@ clips apenas.
   `nearest_scale_pitch` (empate para baixo) em `domain/music_theory.py`,
   consumidos por `transformations/operations.py` (Ciclo 8).
 - Geração: backend heurístico determinístico; `generate_contextual_plan`
-  (ritmo/pitch/movimento/duração/velocity herdados de um clip de referência).
+  (ritmo/pitch/movimento/duração/velocity herdados de um clip de referência);
+  `generate_bass_line_plan` (`generation/bass_line.py`, Ciclo 9) — converte a
+  linha de fundamentais de `bass_line_pitches` numa linha de baixo monofônica:
+  uma nota por janela métrica soante, altura fixada na escala escolhida pelo
+  chamador (`nearest_scale_pitch`, empate para baixo), janelas mudas viram
+  pausa, `velocity` fixa (default 96). Sem RNG — determinístico por construção;
+  `seed` só viaja para report/metadados. O plano cobre exatamente o clip de
+  referência, então `request.bars`/`time_signature` têm de descrever esse mesmo
+  comprimento. É a primeira geração ciente de papel, fundada no Ciclo 7.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (108 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -67,7 +75,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 329 testes verdes.
+- Suíte: 341 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -191,6 +199,21 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   alteração). `tests/test_music_theory.py` (12 casos). `generation/` e
   `analysis/scale_compatibility.py` mantêm suas mensagens próprias — migração é
   incremento próprio. Payload v1 intacto; determinismo bit-exato preservado.
+- [x] **Ciclo 9 — Gerador de baixo diatônico (primeira geração ciente de papel).**
+  `generation/bass_line.py`: `generate_bass_line_plan(request, reference, *,
+  segment_beats=1, velocity=96)`. Reusa `analysis.bass_line_pitches` (Ciclo 7) e
+  `domain.nearest_scale_pitch` / `domain.scale_pitch_classes` (Ciclo 8); sem
+  dependência nova, sem RNG (bit-exato por construção), sem algoritmo musical no
+  MCP/bridge. Uma nota por janela soante, altura fixada na escala do chamador
+  (empate para baixo), janela muda → pausa, nota sustentada alimenta toda janela
+  que cruza, cauda parcial encurtada à borda. O plano flui pelo Payload v1,
+  exporter, evaluation e provenance como qualquer `CompositionPlan`.
+  `tests/test_bass_line_generation.py` (12 casos: contorno, determinismo/seed,
+  snap de altura externa, empate para baixo, sustentação, `segment_beats`, cauda
+  parcial, velocity, comprimento incompatível, tudo mudo, `segment_beats`
+  inválido, serialização v1). Payload v1 intacto. Não integrado ao CLI/MCP —
+  wiring e um fluxo Ableton não destrutivo são incremento próprio (fronteira de
+  validação no Live).
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.

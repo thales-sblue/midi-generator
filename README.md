@@ -182,6 +182,21 @@ ou o fim da saída. Se a tonalidade escolhida não tiver
 nenhuma nota dentro da tessitura do source, usa-se a altura permitida mais
 próxima, com desempate para baixo.
 
+`generate_bass_line_plan` é a primeira geração ciente de papel. Ela lê a linha
+de fundamentais de um `EditableMidiClip` com `bass_line_pitches` — o menor pitch
+soando em cada janela de `segment_beats` batidas — e a converte numa linha de
+baixo monofônica: uma nota por janela soante, com a altura fixada na escala
+escolhida pelo chamador (`nearest_scale_pitch`, empate para baixo), e as janelas
+mudas viram pausa. Uma nota sustentada no source alimenta todas as janelas que
+ela cruza, e a última janela parcial é encurtada até a borda do clip. A `velocity`
+é fixa (padrão 96). O gerador é determinístico por construção e não sorteia nada;
+a `seed` da requisição só viaja para o relatório e os metadados, como
+continuidade de proveniência. O plano gerado cobre exatamente o clip de
+referência, portanto `bars` e `time_signature` da requisição precisam descrever
+esse mesmo comprimento. A tonalidade continua sendo decisão explícita do
+chamador, que pode usar os candidatos de `analyze_clip` sem transformar uma
+compatibilidade ambígua em veredito automático.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.
