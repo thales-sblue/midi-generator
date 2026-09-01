@@ -4,7 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 31/08/2026 — Ciclo 5 (manifesto de proveniência v0).
+Última atualização: 31/08/2026 — Ciclo 6 (harness de verificação read-back do
+gate do Live).
 
 ## Escopo do v1
 
@@ -49,7 +50,19 @@ clips apenas.
   pelo chamador. Schema próprio, ao lado do Payload v1 e nunca dentro dele;
   `validate_manifest` checa a estrutura. CLI `--provenance` grava
   `<saída>.provenance.json`. `docs/PROVENANCE.md`. (Ciclo 5).
-- Suíte: 294 testes verdes.
+- Verificação de gate: `midi_generator/mcp/verification.py` —
+  `verify_transform_roundtrip` / `verify_contextual_roundtrip` rodam a
+  orquestração real, releem source e target e conferem estruturalmente
+  (nota a nota, via `clip_notes_to_ableton`) que o target contém o que o
+  motor determinístico pretendia escrever e que o source ficou intacto.
+  Reusa a orquestração de `ableton_transform` e as mesmas funções de
+  domínio; não adiciona algoritmo musical. CLI
+  `python -m midi_generator.mcp.verification --source T S --target T S`
+  (roda as 5 operações do gate; `--json` para relatório colável; sai ≠ 0 e
+  imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
+  (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
+  contexto Live em memória. (Ciclo 6).
+- Suíte: 302 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -69,7 +82,38 @@ clips apenas.
 - `create_contextual_variation_from_ableton_clip`
 
 Domínio, preflight e orquestração MCP já cobertos por testes; falta conferir a
-escrita no piano roll do Live. Registrar evidência real aqui ao validar.
+escrita no piano roll do Live contra o Ableton real. Ableton indisponível nesta
+máquina em 31/08/2026 (`python -m midi_generator.ableton doctor` →
+`unavailable`, `127.0.0.1:20812` recusou a conexão; Live 12 não estava aberto /
+Remote Script inativo). Nenhuma das 5 foi executada contra o Live neste ciclo —
+seguem **não validadas no Live**.
+
+Cobertura automatizada conferida neste ciclo (não duplicar):
+
+| Operação | Domínio bit-exato | Orquestração (preflight/fingerprint/CLIP_CHANGED/não-destrutivo) | MCP tool | Bridge dispatcher (fake Live) |
+| --- | --- | --- | --- | --- |
+| `constrain_to_scale` | `test_transformations.py`, `test_scales.py` | `test_ableton_transform.py` | `test_ableton_mcp.py` | `test_ableton_bridge_core.py` |
+| `transpose_diatonic` | idem | idem | idem | idem |
+| `harmonize_diatonic` | idem | idem (+ rejeita pitch fora da escala antes do duplicate) | idem | idem |
+| `velocity_ramp` | idem | idem | idem | idem |
+| `create_contextual_variation_from_ableton_clip` | `test_contextual_generation.py` | `test_ableton_transform.py` (preflight, determinismo, 4/4, cópia protegida) | `test_ableton_mcp.py` | idem |
+
+Procedimento mínimo para fechar o gate (com Live 12 aberto + Control Surface
+`MidiGeneratorBridge` ativo):
+
+1. `python -m midi_generator.ableton doctor` → deve dizer `connected`.
+2. Numa track MIDI da Session View, criar um clip de origem de 4/4 com todas as
+   notas dentro de C maior (pré-condição de `harmonize_diatonic`); anotar
+   track/scene (ex.: `0 0`) e deixar 5 slots vazios logo abaixo.
+3. `$env:PYTHONPATH = "src"; python -m midi_generator.mcp.verification --source 0 0 --target 0 1 --json`
+   (roda as 5 operações em `0 1`..`0 5`).
+4. Colar o JSON aqui. Gate fechado só se **todas** as operações reportarem
+   `"passed": true` (checks `orchestration_succeeded`, `source_preserved`,
+   `target_matches_expected`, `reported_fingerprint_matches_readback`).
+5. Conferir a olho no piano roll do Live que o clip de origem em `0 0` continua
+   idêntico e que cada cópia tem o conteúdo esperado.
+6. Se algo falhar: abrir issue com o `first_note_diff` do relatório antes de
+   marcar qualquer operação como validada.
 
 ## Gate de escuta do SkyTNT (gate humano, não é ciclo)
 
@@ -114,6 +158,16 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   `generated_at` injetado). Schema próprio versionado, ao lado do Payload v1 e
   nunca dentro. CLI `--provenance`. `tests/test_provenance.py` (18 testes).
   `docs/PROVENANCE.md`. Payload v1 intacto.
+- [x] **Ciclo 6 — Harness de verificação read-back do gate do Live.** Módulo
+  `mcp/verification.py`: `verify_transform_roundtrip` / `verify_contextual_roundtrip`
+  + `VerificationReport`/`VerificationCheck` + CLI
+  `python -m midi_generator.mcp.verification`. Roda a orquestração real, relê
+  source e target e compara nota a nota contra o resultado do domínio; confirma
+  source intacto e fingerprint reportado == fingerprint relido. Reusa
+  `ableton_transform` e as transformações de domínio; sem algoritmo musical
+  novo; Payload v1 intacto. `tests/test_ableton_verification.py` (8 testes)
+  contra o `BridgeDispatcher` real. Instrumento para fechar o gate humano das 5
+  operações pendentes quando o Live estiver acessível.
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.
