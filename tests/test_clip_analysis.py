@@ -1,6 +1,10 @@
 import pytest
 
-from midi_generator.analysis import analyze_clip, rank_scale_candidates
+from midi_generator.analysis import (
+    analyze_clip,
+    bass_line_pitches,
+    rank_scale_candidates,
+)
 from midi_generator.domain import NoteEvent
 from midi_generator.transformations import EditableMidiClip
 
@@ -168,3 +172,128 @@ def test_scale_ranking_is_deterministic_and_ignores_muted_notes():
     assert first[0].root_note == "C"
     assert first[0].scale == "major"
     assert first[0].coverage == 1.0
+
+
+def test_bass_line_reads_the_lowest_pitch_of_each_beat():
+    clip = EditableMidiClip(
+        length_ticks=1920,
+        notes=(
+            NoteEvent(60, 0, 480, 90),
+            NoteEvent(62, 480, 480, 90),
+            NoteEvent(64, 960, 480, 90),
+            NoteEvent(65, 1440, 480, 90),
+        ),
+    )
+
+    assert bass_line_pitches(clip) == (60, 62, 64, 65)
+
+
+def test_bass_line_takes_the_lowest_of_overlapping_voices_per_segment():
+    clip = EditableMidiClip(
+        length_ticks=960,
+        notes=(
+            NoteEvent(67, 0, 960, 90),
+            NoteEvent(60, 0, 480, 90),
+            NoteEvent(72, 480, 480, 90),
+        ),
+    )
+
+    assert bass_line_pitches(clip) == (60, 67)
+
+
+def test_bass_line_reports_a_sustained_note_in_every_segment_it_crosses():
+    clip = EditableMidiClip(
+        length_ticks=1440,
+        notes=(NoteEvent(48, 0, 1440, 90),),
+    )
+
+    assert bass_line_pitches(clip) == (48, 48, 48)
+
+
+def test_bass_line_marks_a_silent_segment_as_none():
+    clip = EditableMidiClip(
+        length_ticks=1440,
+        notes=(
+            NoteEvent(50, 0, 480, 90),
+            NoteEvent(53, 960, 480, 90),
+        ),
+    )
+
+    assert bass_line_pitches(clip) == (50, None, 53)
+
+
+def test_bass_line_groups_by_the_requested_segment_width():
+    clip = EditableMidiClip(
+        length_ticks=1920,
+        notes=(
+            NoteEvent(60, 0, 480, 90),
+            NoteEvent(55, 480, 480, 90),
+            NoteEvent(64, 960, 480, 90),
+            NoteEvent(62, 1440, 480, 90),
+        ),
+    )
+
+    assert bass_line_pitches(clip, segment_beats=2) == (55, 62)
+
+
+def test_bass_line_keeps_a_short_trailing_segment():
+    clip = EditableMidiClip(
+        length_ticks=1200,
+        notes=(
+            NoteEvent(60, 0, 480, 90),
+            NoteEvent(61, 480, 480, 90),
+            NoteEvent(70, 960, 240, 90),
+        ),
+    )
+
+    assert bass_line_pitches(clip) == (60, 61, 70)
+
+
+def test_bass_line_spanning_segment_wider_than_clip_returns_one_entry():
+    clip = EditableMidiClip(
+        length_ticks=480,
+        notes=(NoteEvent(59, 0, 480, 90),),
+    )
+
+    assert bass_line_pitches(clip, segment_beats=4) == (59,)
+
+
+def test_bass_line_ignores_muted_notes():
+    clip = EditableMidiClip(
+        length_ticks=960,
+        notes=(
+            NoteEvent(40, 0, 960, 90, mute=True),
+            NoteEvent(60, 0, 480, 90),
+        ),
+    )
+
+    assert bass_line_pitches(clip) == (60, None)
+
+
+def test_bass_line_of_a_clip_without_sounding_notes_is_all_none():
+    empty = EditableMidiClip(length_ticks=1440, notes=())
+    muted = EditableMidiClip(
+        length_ticks=1440,
+        notes=(NoteEvent(50, 0, 1440, 90, mute=True),),
+    )
+
+    assert bass_line_pitches(empty) == (None, None, None)
+    assert bass_line_pitches(muted) == (None, None, None)
+
+
+@pytest.mark.parametrize("segment_beats", [0, -1, True, 1.0, "1"])
+def test_bass_line_rejects_a_non_positive_integer_segment(segment_beats):
+    clip = EditableMidiClip(length_ticks=960, notes=(NoteEvent(60, 0, 480, 90),))
+
+    with pytest.raises(ValueError, match="segment_beats"):
+        bass_line_pitches(clip, segment_beats=segment_beats)
+
+
+def test_bass_line_validates_the_clip_before_reading_it():
+    invalid = EditableMidiClip(
+        length_ticks=480,
+        notes=(NoteEvent(60, 0, 960, 90),),
+    )
+
+    with pytest.raises(ValueError, match="beyond"):
+        bass_line_pitches(invalid)

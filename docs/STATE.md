@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 31/08/2026 — Ciclo 6 (harness de verificação read-back do
-gate do Live).
+Última atualização: 31/08/2026 — Ciclo 7 (primitiva de análise: linha de
+fundamentais do clip).
 
 ## Escopo do v1
 
@@ -21,7 +21,10 @@ clips apenas.
 - Geração: backend heurístico determinístico; `generate_contextual_plan`
   (ritmo/pitch/movimento/duração/velocity herdados de um clip de referência).
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
-  todas as escalas × 12 centros (108 candidatos hoje).
+  todas as escalas × 12 centros (108 candidatos hoje) + `top_line_intervals`
+  (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
+  segmento de N batidas; nota sustentada conta em toda janela que cruza; `None`
+  em janela muda) — insumo para geração ciente de papel pós-v1 (Ciclo 7).
 - Transformações puras (ticks, 480 tpb): transpose, invert, retrograde, quantize,
   legato, staccato, humanize, constrain_to_scale, transpose_diatonic,
   harmonize_diatonic, velocity_ramp.
@@ -62,7 +65,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 302 testes verdes.
+- Suíte: 317 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -168,6 +171,14 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   novo; Payload v1 intacto. `tests/test_ableton_verification.py` (8 testes)
   contra o `BridgeDispatcher` real. Instrumento para fechar o gate humano das 5
   operações pendentes quando o Live estiver acessível.
+- [x] **Ciclo 7 — Linha de fundamentais do clip (fundação da geração de papel).**
+  `analysis/clip_profile.py`: `bass_line_pitches(clip, *, segment_beats=1)` —
+  menor pitch soando por janela métrica, `None` em janela muda, nota sustentada
+  contando em toda janela que cruza. Função pura, sem RNG, não toca `ClipProfile`
+  nem o Payload v1. Export em `analysis/__init__.py`.
+  `tests/test_clip_analysis.py` (+11 casos: polifonia, sustentação, silêncio,
+  `segment_beats`, cauda parcial, `mute`, sem notas, validação). É o insumo do
+  próximo incremento (gerador de baixo diatônico seguindo essa linha).
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.

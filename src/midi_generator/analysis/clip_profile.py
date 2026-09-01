@@ -142,6 +142,44 @@ def top_line_intervals(notes: tuple[NoteEvent, ...]) -> tuple[int, ...]:
     )
 
 
+def bass_line_pitches(
+    clip: EditableMidiClip, *, segment_beats: int = 1
+) -> tuple[int | None, ...]:
+    """Return the lowest sounding pitch of each successive segment of a clip.
+
+    The clip is split into consecutive windows ``segment_beats`` beats wide
+    (the final window may be shorter). Each entry is the lowest pitch of any
+    unmuted note overlapping that window, or ``None`` when the window is
+    silent. A sustained note contributes to every window it crosses, so the
+    result reads the harmonic foundation over time rather than only onsets.
+    """
+    clip.validate()
+    if (
+        isinstance(segment_beats, bool)
+        or not isinstance(segment_beats, int)
+        or segment_beats <= 0
+    ):
+        raise ValueError("segment_beats must be a positive integer.")
+
+    segment_ticks = segment_beats * clip.ticks_per_beat
+    # Integer ceil: cover the whole clip even when the last window is partial.
+    segment_count = -(-clip.length_ticks // segment_ticks)
+    sounding = tuple(note for note in clip.notes if not note.mute)
+
+    line: list[int | None] = []
+    for index in range(segment_count):
+        window_start = index * segment_ticks
+        window_end = min(window_start + segment_ticks, clip.length_ticks)
+        pitches = [
+            note.pitch
+            for note in sounding
+            if note.start < window_end
+            and note.start + note.duration > window_start
+        ]
+        line.append(min(pitches) if pitches else None)
+    return tuple(line)
+
+
 def _rounded_ratio(numerator: int, denominator: int, digits: int) -> float:
     quantum = Decimal(1).scaleb(-digits)
     value = Decimal(numerator) / Decimal(denominator)
