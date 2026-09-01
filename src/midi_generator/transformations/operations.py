@@ -3,7 +3,11 @@
 import random
 from dataclasses import replace
 
-from midi_generator.domain.music_theory import ROOT_NOTES, SCALE_INTERVALS
+from midi_generator.domain.music_theory import (
+    nearest_scale_pitch,
+    scale_pitch_classes,
+    scale_pitches,
+)
 
 from .clip import EditableMidiClip
 
@@ -135,12 +139,11 @@ def constrain_to_scale(
     deterministic and avoids an unintended upward melodic drift.
     """
     clip.validate()
-    root, intervals = _scale_definition(root_note, scale)
-    allowed_pitch_classes = {(root + interval) % 12 for interval in intervals}
+    allowed_pitch_classes = scale_pitch_classes(root_note, scale)
     return replace(
         clip,
         notes=tuple(
-            replace(note, pitch=_nearest_scale_pitch(note.pitch, allowed_pitch_classes))
+            replace(note, pitch=nearest_scale_pitch(note.pitch, allowed_pitch_classes))
             for note in clip.notes
         ),
     )
@@ -153,22 +156,19 @@ def transpose_diatonic(
     clip.validate()
     if not _is_int(steps):
         raise ValueError("steps must be an integer.")
-    root, intervals = _scale_definition(root_note, scale)
-    allowed_pitch_classes = {(root + interval) % 12 for interval in intervals}
-    scale_pitches = tuple(
-        pitch for pitch in range(128) if pitch % 12 in allowed_pitch_classes
-    )
-    positions = {pitch: index for index, pitch in enumerate(scale_pitches)}
+    allowed_pitch_classes = scale_pitch_classes(root_note, scale)
+    pitches = scale_pitches(root_note, scale)
+    positions = {pitch: index for index, pitch in enumerate(pitches)}
     source_pitches = [
-        _nearest_scale_pitch(note.pitch, allowed_pitch_classes) for note in clip.notes
+        nearest_scale_pitch(note.pitch, allowed_pitch_classes) for note in clip.notes
     ]
     target_indices = [positions[pitch] + steps for pitch in source_pitches]
-    if any(index < 0 or index >= len(scale_pitches) for index in target_indices):
+    if any(index < 0 or index >= len(pitches) for index in target_indices):
         raise ValueError("Diatonic transposition would produce a pitch outside 0..127.")
     return replace(
         clip,
         notes=tuple(
-            replace(note, pitch=scale_pitches[index])
+            replace(note, pitch=pitches[index])
             for note, index in zip(clip.notes, target_indices, strict=True)
         ),
     )
@@ -181,11 +181,10 @@ def harmonize_diatonic(
     clip.validate()
     if not _is_int(steps) or steps == 0:
         raise ValueError("steps must be a non-zero integer.")
-    root, intervals = _scale_definition(root_note, scale)
-    allowed = {(root + interval) % 12 for interval in intervals}
+    allowed = scale_pitch_classes(root_note, scale)
     if any(note.pitch % 12 not in allowed for note in clip.notes):
         raise ValueError("All source pitches must belong to the requested scale.")
-    pitches = tuple(pitch for pitch in range(128) if pitch % 12 in allowed)
+    pitches = scale_pitches(root_note, scale)
     positions = {pitch: index for index, pitch in enumerate(pitches)}
     indices = [positions[note.pitch] + steps for note in clip.notes]
     if any(index < 0 or index >= len(pitches) for index in indices):
@@ -256,25 +255,6 @@ def _round_ratio(numerator: int, denominator: int) -> int:
     if remainder * 2 >= denominator:
         magnitude += 1
     return magnitude if numerator >= 0 else -magnitude
-
-
-def _scale_definition(root_note: str, scale: str) -> tuple[int, tuple[int, ...]]:
-    if not isinstance(root_note, str) or root_note.upper() not in ROOT_NOTES:
-        raise ValueError("root_note must be one of C, C#, Db, D, etc.")
-    if not isinstance(scale, str) or scale.lower() not in SCALE_INTERVALS:
-        raise ValueError(f"scale must be one of: {', '.join(SCALE_INTERVALS)}.")
-    return ROOT_NOTES[root_note.upper()], SCALE_INTERVALS[scale.lower()]
-
-
-def _nearest_scale_pitch(pitch: int, allowed_pitch_classes: set[int]) -> int:
-    for distance in range(13):
-        lower = pitch - distance
-        if lower >= 0 and lower % 12 in allowed_pitch_classes:
-            return lower
-        upper = pitch + distance
-        if upper <= 127 and upper % 12 in allowed_pitch_classes:
-            return upper
-    raise AssertionError("Every scale must contain a reachable MIDI pitch.")
 
 
 def _is_int(value: object) -> bool:

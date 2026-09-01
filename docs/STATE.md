@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 31/08/2026 — Ciclo 7 (primitiva de análise: linha de
-fundamentais do clip).
+Última atualização: 01/09/2026 — Ciclo 8 (API de escala compartilhada no
+domínio).
 
 ## Escopo do v1
 
@@ -17,7 +17,9 @@ clips apenas.
 ## Feito
 
 - Domínio: `NoteEvent`, `MelodyRequest`, `CompositionPlan`, `GenerationReport`;
-  tabela de escalas.
+  tabela de escalas; helpers puros `scale_pitch_classes` / `scale_pitches` /
+  `nearest_scale_pitch` (empate para baixo) em `domain/music_theory.py`,
+  consumidos por `transformations/operations.py` (Ciclo 8).
 - Geração: backend heurístico determinístico; `generate_contextual_plan`
   (ritmo/pitch/movimento/duração/velocity herdados de um clip de referência).
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
@@ -65,7 +67,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 317 testes verdes.
+- Suíte: 329 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -179,6 +181,16 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   `tests/test_clip_analysis.py` (+11 casos: polifonia, sustentação, silêncio,
   `segment_beats`, cauda parcial, `mute`, sem notas, validação). É o insumo do
   próximo incremento (gerador de baixo diatônico seguindo essa linha).
+- [x] **Ciclo 8 — API de escala compartilhada no domínio.**
+  `domain/music_theory.py` ganha `scale_pitch_classes`, `scale_pitches` e
+  `nearest_scale_pitch` (empate para baixo, movido verbatim de
+  `transformations/operations.py`). `constrain_to_scale`, `transpose_diatonic` e
+  `harmonize_diatonic` passam a usar essa API; privados `_scale_definition` /
+  `_nearest_scale_pitch` e as comprehensions `range(128)` inline removidos.
+  Comportamento idêntico (`test_scales.py` / `test_transformations.py` verdes sem
+  alteração). `tests/test_music_theory.py` (12 casos). `generation/` e
+  `analysis/scale_compatibility.py` mantêm suas mensagens próprias — migração é
+  incremento próprio. Payload v1 intacto; determinismo bit-exato preservado.
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
    `harmonize_diatonic` antes.

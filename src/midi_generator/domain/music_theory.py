@@ -35,3 +35,37 @@ PITCH_CLASS_NAMES = (
     "A#",
     "B",
 )
+
+
+def scale_pitch_classes(root_note: str, scale: str) -> frozenset[int]:
+    """Return the 0..11 pitch classes of a named scale rooted on a named note."""
+    if not isinstance(root_note, str) or root_note.upper() not in ROOT_NOTES:
+        raise ValueError("root_note must be one of C, C#, Db, D, etc.")
+    if not isinstance(scale, str) or scale.lower() not in SCALE_INTERVALS:
+        raise ValueError(f"scale must be one of: {', '.join(SCALE_INTERVALS)}.")
+    root = ROOT_NOTES[root_note.upper()]
+    return frozenset(
+        (root + interval) % 12 for interval in SCALE_INTERVALS[scale.lower()]
+    )
+
+
+def scale_pitches(root_note: str, scale: str) -> tuple[int, ...]:
+    """Return every MIDI pitch 0..127 that belongs to the given scale, ascending."""
+    allowed = scale_pitch_classes(root_note, scale)
+    return tuple(pitch for pitch in range(128) if pitch % 12 in allowed)
+
+
+def nearest_scale_pitch(pitch: int, pitch_classes: frozenset[int] | set[int]) -> int:
+    """Return the closest MIDI pitch whose class is allowed; ties resolve downward.
+
+    Resolving equidistant choices downward keeps the mapping deterministic and
+    avoids an unintended upward drift when a whole line is snapped to a scale.
+    """
+    for distance in range(13):
+        lower = pitch - distance
+        if lower >= 0 and lower % 12 in pitch_classes:
+            return lower
+        upper = pitch + distance
+        if upper <= 127 and upper % 12 in pitch_classes:
+            return upper
+    raise AssertionError("Every scale must contain a reachable MIDI pitch.")
