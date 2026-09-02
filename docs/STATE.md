@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 13 (escalas não heptatônicas admitidas:
-`major_pentatonic`, `minor_pentatonic` e `blues` em toda a pilha).
+Última atualização: 02/09/2026 — Ciclo 14 (geradores de baixo e leito de acordes
+expostos via MCP num fluxo não destrutivo a partir de um clip de referência).
 
 ## Escopo do v1
 
@@ -103,7 +103,20 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 383 testes verdes.
+- MCP ciente de papel (Ciclo 14): `create_bass_line_from_ableton_clip` e
+  `create_chord_bed_from_ableton_clip` levam `generate_bass_line_plan` /
+  `generate_chord_bed_plan` ao fluxo não destrutivo já usado pela variação
+  contextual. `mcp/ableton_transform.py` ganhou o helper compartilhado
+  `_generate_into_protected_copy` (lê o source uma vez, checa 4/4 inteiro, gera
+  o plano no preflight, duplica com `expected_source_fingerprint`, relê a cópia,
+  confere o comprimento e substitui só a cópia); `create_contextual_midi_clip_copy`
+  passou a usá-lo sem mudança de comportamento. As tools encaminham
+  `segment_beats`/`velocity`/`sustain`/`octave` (e `chord_size` no leito) direto
+  ao gerador — nenhuma validação ou algoritmo musical no MCP — e a resposta ecoa
+  os parâmetros e os metadados do plano (`bars`, `note_grouping`,
+  `octave_offset_semitones`, `chord_count`, `voicing`). `root_note`/`scale`
+  continuam explícitos. Payload v1 intacto; determinismo bit-exato preservado.
+- Suíte: 410 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -121,6 +134,8 @@ clips apenas.
 - `harmonize_diatonic`
 - `velocity_ramp` (via `transform_ableton_midi_clip`)
 - `create_contextual_variation_from_ableton_clip`
+- `create_bass_line_from_ableton_clip` (Ciclo 14)
+- `create_chord_bed_from_ableton_clip` (Ciclo 14)
 
 Domínio, preflight e orquestração MCP já cobertos por testes; falta conferir a
 escrita no piano roll do Live contra o Ableton real. Ableton indisponível nesta
@@ -138,6 +153,8 @@ Cobertura automatizada conferida neste ciclo (não duplicar):
 | `harmonize_diatonic` | idem | idem (+ rejeita pitch fora da escala antes do duplicate) | idem | idem |
 | `velocity_ramp` | idem | idem | idem | idem |
 | `create_contextual_variation_from_ableton_clip` | `test_contextual_generation.py` | `test_ableton_transform.py` (preflight, determinismo, 4/4, cópia protegida) | `test_ableton_mcp.py` | idem |
+| `create_bass_line_from_ableton_clip` | `test_bass_line_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `segment_beats`/`velocity`/`sustain`/`octave`, `CLIP_CHANGED`) | `test_ableton_mcp.py` | idem |
+| `create_chord_bed_from_ableton_clip` | `test_chord_bed_generation.py` | `test_ableton_role_generation.py` (idem + `chord_size`) | `test_ableton_mcp.py` | idem |
 
 Procedimento mínimo para fechar o gate (com Live 12 aberto + Control Surface
 `MidiGeneratorBridge` ativo):
@@ -155,6 +172,26 @@ Procedimento mínimo para fechar o gate (com Live 12 aberto + Control Surface
    idêntico e que cada cópia tem o conteúdo esperado.
 6. Se algo falhar: abrir issue com o `first_note_diff` do relatório antes de
    marcar qualquer operação como validada.
+
+Procedimento mínimo para o gate das tools cientes de papel do Ciclo 14
+(`create_bass_line_from_ableton_clip` / `create_chord_bed_from_ableton_clip`) —
+o harness `mcp.verification` ainda **não** as cobre, então a conferência é manual:
+
+1. `python -m midi_generator.ableton doctor` → `connected`.
+2. Numa track MIDI da Session View, criar um clip de referência de N compassos
+   4/4 com uma linha de fundamentais audível (baixo ou acordes); anotar
+   track/scene (ex.: `0 0`) e deixar `0 1` e `0 2` vazios.
+3. Chamar `create_bass_line_from_ableton_clip` com `source 0 0`, `target 0 1`,
+   `bpm`/`root_note`/`scale`/`seed` explícitos (ex.: `120 / C / minor / 42`),
+   `octave` opcional.
+4. Chamar `create_chord_bed_from_ableton_clip` com `source 0 0`, `target 0 2`,
+   os mesmos `bpm`/tonalidade/`seed` e `chord_size` (ex.: 3).
+5. Conferir no piano roll: `0 0` idêntico ao original; `0 1` com uma nota de
+   baixo por janela soante fixada na escala; `0 2` com um acorde em posição
+   fechada por janela soante. Repetir a chamada com a mesma seed e conferir que
+   o conteúdo é bit a bit igual (comparar `target_clip_fingerprint`).
+6. Repetir a chamada apontando `target` para um slot ocupado e confirmar a recusa
+   (`TARGET_CLIP_SLOT_NOT_EMPTY`), com o source intacto.
 
 ## Gate de escuta do SkyTNT (gate humano, não é ciclo)
 
@@ -310,6 +347,29 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   5/7. Como `rank_candidates` compara candidatos da *mesma* requisição (mesma
   escala), o teto é uniforme e não distorce o ranking; corrigir a normalização
   exigiria dar a escala ao scoring, que hoje só vê o `ClipProfile`.
+- [x] **Ciclo 14 — Fluxo MCP não destrutivo para baixo e leito de acordes.**
+  `mcp/server.py`: `create_bass_line_from_ableton_clip` e
+  `create_chord_bed_from_ableton_clip` — localizam e leem o clip de referência,
+  montam a requisição (comprimento = clip, 4/4 inteiro), chamam
+  `generate_bass_line_plan` / `generate_chord_bed_plan` e escrevem só numa cópia
+  protegida por fingerprint. `mcp/ableton_transform.py` extraiu o pipeline
+  compartilhado `_generate_into_protected_copy` (lê o source uma vez → checa 4/4
+  → gera o plano no preflight → duplica com `expected_source_fingerprint` → relê
+  a cópia → confere comprimento → substitui só a cópia);
+  `create_contextual_midi_clip_copy` foi religado a ele sem mudança de
+  comportamento (23 testes de `test_ableton_transform.py` verdes sem alteração).
+  As tools encaminham `segment_beats`/`velocity`/`sustain`/`octave` (e
+  `chord_size` no leito) direto ao gerador — nenhuma validação nem algoritmo
+  musical no MCP; erros do core/bridge viram `ToolError`. A resposta ecoa os
+  parâmetros e metadados do plano. `root_note`/`scale` seguem explícitos.
+  `tests/test_ableton_role_generation.py` (24 casos) +
+  `tests/test_ableton_mcp.py` (+3). Payload v1 intacto; determinismo bit-exato
+  preservado. Fronteira: criação e conteúdo no Live **pendentes de validação
+  manual** (ver seção do gate acima).
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
+3. **Geração ciente de papel de bateria/percussão** — kick, snare/clap e hi-hat
+   condicionados ao contexto musical existente (linha de fundamentais, densidade
+   de onsets, compasso). Fundação de leitura já pronta em `generation/foundation.py`
+   e `analysis/`; começar pelo kick seguindo a linha de fundamentais.

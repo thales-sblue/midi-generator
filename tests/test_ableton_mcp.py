@@ -344,6 +344,112 @@ def test_mcp_client_creates_contextual_variation_only_in_target(monkeypatch):
     assert result.structured_content["target_clip_fingerprint"] == "result"
 
 
+def test_mcp_client_creates_bass_line_only_in_target(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            tools = await client.list_tools()
+            result = await client.call_tool(
+                "create_bass_line_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "bpm": 120,
+                    "root_note": "C",
+                    "scale": "major",
+                    "seed": 42,
+                    "velocity": 70,
+                },
+            )
+            return tools, result
+
+    tools, result = asyncio.run(call_tool())
+
+    assert "create_bass_line_from_ableton_clip" in {
+        tool.name for tool in tools.tools
+    }
+    assert result.is_error is False
+    assert fake.reads == [(0, 0), (0, 1)]
+    assert fake.duplicated == (0, 0, 0, 1, "source")
+    assert fake.replaced[:3] == (0, 1, "copy")
+    assert all(note["velocity"] == 70 for note in fake.replaced[3])
+    assert result.structured_content["generated"] is True
+    assert result.structured_content["role"] == "bass_line"
+    assert result.structured_content["bars"] == 1
+    assert result.structured_content["velocity"] == 70
+    assert result.structured_content["source_clip_fingerprint"] == "source"
+    assert result.structured_content["target_clip_fingerprint"] == "result"
+
+
+def test_mcp_client_creates_chord_bed_only_in_target(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            tools = await client.list_tools()
+            result = await client.call_tool(
+                "create_chord_bed_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "bpm": 120,
+                    "root_note": "C",
+                    "scale": "major",
+                    "seed": 42,
+                    "chord_size": 4,
+                },
+            )
+            return tools, result
+
+    tools, result = asyncio.run(call_tool())
+
+    assert "create_chord_bed_from_ableton_clip" in {
+        tool.name for tool in tools.tools
+    }
+    assert result.is_error is False
+    assert fake.reads == [(0, 0), (0, 1)]
+    assert fake.duplicated == (0, 0, 0, 1, "source")
+    assert fake.replaced[:3] == (0, 1, "copy")
+    assert result.structured_content["generated"] is True
+    assert result.structured_content["role"] == "chord_bed"
+    assert result.structured_content["chord_size"] == 4
+    assert result.structured_content["voicing"] == "stacked_scale_degrees"
+    assert result.structured_content["target_clip_fingerprint"] == "result"
+
+
+def test_role_generation_tools_reject_invalid_key_via_tool_error(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "create_bass_line_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "bpm": 120,
+                    "root_note": "H",
+                    "scale": "major",
+                    "seed": 42,
+                },
+            )
+
+    result = asyncio.run(call_tool())
+
+    assert result.is_error is True
+    assert not hasattr(fake, "replaced")
+
+
 def test_transform_tool_exposes_retrograde_without_extra_parameters(monkeypatch):
     fake = TransformingFakeAbletonClient()
     monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)

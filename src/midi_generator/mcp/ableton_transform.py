@@ -1,10 +1,23 @@
-"""High-level orchestration for safe Ableton clip transformations."""
+"""High-level orchestration for safe Ableton clip transformations and generation.
 
+Every function here only sequences reads, preflight, a fingerprint-protected
+duplication and a copy-only replace. The musical algorithms live in
+``transformations/`` and ``generation/`` and are reached through callables.
+"""
+
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, TypedDict
 
 from midi_generator.ableton import AbletonClient
-from midi_generator.domain import MelodyRequest
-from midi_generator.generation import generate_contextual_plan
+from midi_generator.domain import CompositionPlan, MelodyRequest
+from midi_generator.generation import (
+    generate_bass_line_plan,
+    generate_chord_bed_plan,
+    generate_contextual_plan,
+)
+from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
+from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
 from midi_generator.generation.melody import BEATS_PER_BAR
 from midi_generator.integration import (
     ableton_snapshot_to_clip,
@@ -70,18 +83,89 @@ class ContextualVariationResult(TypedDict):
     seed: int
 
 
-def create_contextual_midi_clip_copy(
+class BassLineClipResult(TypedDict):
+    generated: bool
+    role: str
+    source_track_index: int
+    source_scene_index: int
+    target_track_index: int
+    target_scene_index: int
+    clip_length_beats: float
+    note_count: int
+    source_clip_fingerprint: str
+    target_clip_fingerprint: str
+    bpm: int
+    root_note: str
+    scale: str
+    seed: int
+    bars: int
+    segment_beats: int
+    velocity: int
+    sustain: bool
+    octave: int | None
+    note_grouping: str
+    octave_offset_semitones: int
+
+
+class ChordBedClipResult(TypedDict):
+    generated: bool
+    role: str
+    source_track_index: int
+    source_scene_index: int
+    target_track_index: int
+    target_scene_index: int
+    clip_length_beats: float
+    note_count: int
+    source_clip_fingerprint: str
+    target_clip_fingerprint: str
+    bpm: int
+    root_note: str
+    scale: str
+    seed: int
+    bars: int
+    segment_beats: int
+    velocity: int
+    sustain: bool
+    octave: int | None
+    chord_size: int
+    chord_count: int
+    voicing: str
+    note_grouping: str
+    octave_offset_semitones: int
+
+
+@dataclass(frozen=True)
+class _GeneratedCopy:
+    """Outcome of the shared read/preflight/duplicate/replace pipeline."""
+
+    source_fingerprint: str
+    bars: int
+    plan: CompositionPlan
+    replacement: dict[str, Any]
+
+
+def _generate_into_protected_copy(
     client: AbletonClient,
     source_track_index: int,
     source_scene_index: int,
     target_track_index: int,
     target_scene_index: int,
+    build_plan: Callable[[MelodyRequest, EditableMidiClip], CompositionPlan],
+    *,
     bpm: int,
     root_note: str,
     scale: str,
     seed: int,
-) -> ContextualVariationResult:
-    """Generate a contextual variation and replace only a protected copy."""
+) -> _GeneratedCopy:
+    """Read the source, preflight generation, then write only a protected copy.
+
+    ``build_plan`` turns the source clip and a length-matched request into a
+    :class:`CompositionPlan`; every musical decision (and its validation) lives
+    inside that callable, never here. The source snapshot is read once, the plan
+    is generated once before any Ableton mutation, the duplication is bound to
+    the source fingerprint, and the generated notes replace only the freshly
+    read copy. The source is never handed to ``replace_midi_clip_notes``.
+    """
     _validate_indices(
         source_track_index,
         source_scene_index,
@@ -99,13 +183,13 @@ def create_contextual_midi_clip_copy(
         )
 
     request = MelodyRequest(bpm, root_note, scale, bars, seed)
-    plan = generate_contextual_plan(request, source_clip)
-    contextual_clip = EditableMidiClip(
+    plan = build_plan(request, source_clip)
+    generated_clip = EditableMidiClip(
         length_ticks=source_clip.length_ticks,
         notes=plan.notes,
         ticks_per_beat=source_clip.ticks_per_beat,
     )
-    contextual_clip.validate()
+    generated_clip.validate()
 
     client.duplicate_midi_clip(
         source_track_index,
@@ -116,13 +200,45 @@ def create_contextual_midi_clip_copy(
     )
     copy_snapshot = client.get_midi_clip(target_track_index, target_scene_index)
     copy_clip = ableton_snapshot_to_clip(copy_snapshot)
-    if copy_clip.length_ticks != contextual_clip.length_ticks:
+    if copy_clip.length_ticks != generated_clip.length_ticks:
         raise ValueError("Duplicated clip length does not match the source clip.")
     replacement = client.replace_midi_clip_notes(
         target_track_index,
         target_scene_index,
         _required_fingerprint(copy_snapshot),
-        clip_notes_to_ableton(contextual_clip),
+        clip_notes_to_ableton(generated_clip),
+    )
+    return _GeneratedCopy(
+        source_fingerprint=source_fingerprint,
+        bars=bars,
+        plan=plan,
+        replacement=replacement,
+    )
+
+
+def create_contextual_midi_clip_copy(
+    client: AbletonClient,
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+) -> ContextualVariationResult:
+    """Generate a contextual variation and replace only a protected copy."""
+    outcome = _generate_into_protected_copy(
+        client,
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        lambda request, source_clip: generate_contextual_plan(request, source_clip),
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
     )
     return ContextualVariationResult(
         contextualized=True,
@@ -130,14 +246,155 @@ def create_contextual_midi_clip_copy(
         source_scene_index=source_scene_index,
         target_track_index=target_track_index,
         target_scene_index=target_scene_index,
-        clip_length_beats=replacement["clip_length_beats"],
-        note_count=replacement["note_count"],
-        source_clip_fingerprint=source_fingerprint,
-        target_clip_fingerprint=replacement["clip_fingerprint"],
+        clip_length_beats=outcome.replacement["clip_length_beats"],
+        note_count=outcome.replacement["note_count"],
+        source_clip_fingerprint=outcome.source_fingerprint,
+        target_clip_fingerprint=outcome.replacement["clip_fingerprint"],
         bpm=bpm,
         root_note=root_note,
         scale=scale,
         seed=seed,
+    )
+
+
+def create_bass_line_midi_clip_copy(
+    client: AbletonClient,
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    *,
+    segment_beats: int = 1,
+    velocity: int = DEFAULT_BASS_VELOCITY,
+    sustain: bool = False,
+    octave: int | None = None,
+) -> BassLineClipResult:
+    """Generate a diatonic bass line for the source clip into a protected copy.
+
+    The musical work is :func:`generate_bass_line_plan`; this function only
+    reads the source, builds the length-matched request, runs the shared
+    non-destructive pipeline and echoes the forwarded parameters back. ``root_note``
+    and ``scale`` stay an explicit choice of the caller.
+    """
+    outcome = _generate_into_protected_copy(
+        client,
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        lambda request, source_clip: generate_bass_line_plan(
+            request,
+            source_clip,
+            segment_beats=segment_beats,
+            velocity=velocity,
+            sustain=sustain,
+            octave=octave,
+        ),
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+    )
+    metadata = outcome.plan.metadata
+    return BassLineClipResult(
+        generated=True,
+        role="bass_line",
+        source_track_index=source_track_index,
+        source_scene_index=source_scene_index,
+        target_track_index=target_track_index,
+        target_scene_index=target_scene_index,
+        clip_length_beats=outcome.replacement["clip_length_beats"],
+        note_count=outcome.replacement["note_count"],
+        source_clip_fingerprint=outcome.source_fingerprint,
+        target_clip_fingerprint=outcome.replacement["clip_fingerprint"],
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+        bars=outcome.bars,
+        segment_beats=segment_beats,
+        velocity=velocity,
+        sustain=sustain,
+        octave=octave,
+        note_grouping=metadata["note_grouping"],
+        octave_offset_semitones=metadata["octave_offset_semitones"],
+    )
+
+
+def create_chord_bed_midi_clip_copy(
+    client: AbletonClient,
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    *,
+    segment_beats: int = 1,
+    velocity: int = DEFAULT_CHORD_VELOCITY,
+    sustain: bool = False,
+    octave: int | None = None,
+    chord_size: int = 3,
+) -> ChordBedClipResult:
+    """Generate a diatonic chord bed for the source clip into a protected copy.
+
+    The musical work is :func:`generate_chord_bed_plan`; this function only
+    reads the source, builds the length-matched request, runs the shared
+    non-destructive pipeline and echoes the forwarded parameters back. ``root_note``
+    and ``scale`` stay an explicit choice of the caller.
+    """
+    outcome = _generate_into_protected_copy(
+        client,
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        lambda request, source_clip: generate_chord_bed_plan(
+            request,
+            source_clip,
+            segment_beats=segment_beats,
+            velocity=velocity,
+            sustain=sustain,
+            octave=octave,
+            chord_size=chord_size,
+        ),
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+    )
+    metadata = outcome.plan.metadata
+    return ChordBedClipResult(
+        generated=True,
+        role="chord_bed",
+        source_track_index=source_track_index,
+        source_scene_index=source_scene_index,
+        target_track_index=target_track_index,
+        target_scene_index=target_scene_index,
+        clip_length_beats=outcome.replacement["clip_length_beats"],
+        note_count=outcome.replacement["note_count"],
+        source_clip_fingerprint=outcome.source_fingerprint,
+        target_clip_fingerprint=outcome.replacement["clip_fingerprint"],
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+        bars=outcome.bars,
+        segment_beats=segment_beats,
+        velocity=velocity,
+        sustain=sustain,
+        octave=octave,
+        chord_size=chord_size,
+        chord_count=metadata["chord_count"],
+        voicing=metadata["voicing"],
+        note_grouping=metadata["note_grouping"],
+        octave_offset_semitones=metadata["octave_offset_semitones"],
     )
 
 

@@ -509,6 +509,54 @@ MANUAL**. Geração, determinismo, preflight, proteção do source e orquestraç
 são cobertos automaticamente; a criação e o conteúdo final ainda precisam ser
 conferidos no piano roll do Live.
 
+### Geração ciente de papel a partir de um clip de referência
+
+`create_bass_line_from_ableton_clip` e `create_chord_bed_from_ableton_clip`
+levam os geradores `generate_bass_line_plan` e `generate_chord_bed_plan` ao mesmo
+fluxo não destrutivo: o clip de referência é lido, o comprimento define o número
+de compassos (ainda só 4/4 inteiro), a geração é simulada no domínio e só então o
+source é duplicado com proteção de fingerprint; as notas geradas substituem
+apenas a cópia. O source nunca é enviado à substituição. Nenhuma lógica musical
+vive no MCP: ele localiza e lê o clip, monta a requisição, chama o gerador do
+core, cria a saída e devolve metadados.
+
+`root_note` e `scale` são escolha explícita do chamador — a análise
+(`analyze_ableton_midi_clip` / `rank_scale_candidates`) serve como recomendação
+de compatibilidade, nunca como veredito automático de tonalidade.
+
+`create_bass_line_from_ableton_clip` aceita, além de
+`source_*`/`target_*`/`bpm`/`root_note`/`scale`/`seed`, os mesmos parâmetros do
+gerador: `segment_beats` (default 1), `velocity` (default 96), `sustain`
+(default `false`) e `octave` (default `null`, mantém o registro do source).
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "bpm": 120,
+  "root_note": "C",
+  "scale": "minor",
+  "seed": 42,
+  "segment_beats": 1,
+  "velocity": 96,
+  "sustain": false,
+  "octave": 2
+}
+```
+
+`create_chord_bed_from_ableton_clip` aceita os mesmos parâmetros e ainda
+`chord_size` (2..5, default 3). A resposta ecoa os parâmetros encaminhados e os
+metadados do plano (`bars`, `note_grouping`, `octave_offset_semitones`,
+`chord_count`, `voicing`).
+
+Status da integração Live para `create_bass_line_from_ableton_clip` e
+`create_chord_bed_from_ableton_clip`: **PENDENTE DE VALIDAÇÃO MANUAL**. Domínio,
+determinismo, preflight, proteção do source, encaminhamento de parâmetros e
+orquestração MCP são cobertos automaticamente; a criação e o conteúdo final ainda
+precisam ser conferidos no piano roll do Live.
+
 O `clip_fingerprint` é um SHA-256 de JSON canônico formado pelo comprimento do clip e pelas notas ordenadas, com floats normalizados a nove casas decimais. Toda substituição exige o fingerprint obtido na leitura. Se o conteúdo tiver mudado no Live desde então, o bridge recusa a operação com `CLIP_CHANGED`; o cliente deve ler novamente antes de editar. Requests inválidos são validados integralmente antes da remoção das notas existentes, e notas além do comprimento atual falham com `NOTE_OUTSIDE_CLIP`. O comprimento nunca é alterado implicitamente.
 
 Exemplo de leitura:

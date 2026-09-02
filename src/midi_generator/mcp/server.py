@@ -9,6 +9,8 @@ from midi_generator.ableton import AbletonClient, AbletonError
 from midi_generator.analysis import analyze_clip
 from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_contextual_plan, generate_plan
+from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
+from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
 from midi_generator.integration import (
     ClipProfilePayload,
     IntegrationPayload,
@@ -18,8 +20,12 @@ from midi_generator.integration import (
     validate_payload_v1,
 )
 from midi_generator.mcp.ableton_transform import (
+    BassLineClipResult,
+    ChordBedClipResult,
     ContextualVariationResult,
     TransformedClipResult,
+    create_bass_line_midi_clip_copy,
+    create_chord_bed_midi_clip_copy,
     create_contextual_midi_clip_copy,
     transform_midi_clip_copy,
 )
@@ -27,7 +33,7 @@ from midi_generator.mcp.ableton_transform import (
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.6.0",
+    version="1.7.0",
 )
 
 
@@ -169,6 +175,94 @@ def create_contextual_variation_from_ableton_clip(
             root_note,
             scale,
             seed,
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def create_bass_line_from_ableton_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    segment_beats: int = 1,
+    velocity: int = DEFAULT_BASS_VELOCITY,
+    sustain: bool = False,
+    octave: int | None = None,
+) -> BassLineClipResult:
+    """Generate a diatonic bass line for a source clip into a protected copy.
+
+    Reads the source MIDI clip, builds a length-matched request and delegates
+    every musical decision to ``generate_bass_line_plan``. The source clip is
+    never overwritten: the notes land only in the empty ``target`` slot after a
+    fingerprint-protected duplication. ``root_note`` and ``scale`` are an
+    explicit choice of the caller.
+    """
+    try:
+        return create_bass_line_midi_clip_copy(
+            AbletonClient(),
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            bpm,
+            root_note,
+            scale,
+            seed,
+            segment_beats=segment_beats,
+            velocity=velocity,
+            sustain=sustain,
+            octave=octave,
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def create_chord_bed_from_ableton_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    segment_beats: int = 1,
+    velocity: int = DEFAULT_CHORD_VELOCITY,
+    sustain: bool = False,
+    octave: int | None = None,
+    chord_size: int = 3,
+) -> ChordBedClipResult:
+    """Generate a diatonic chord bed for a source clip into a protected copy.
+
+    Reads the source MIDI clip, builds a length-matched request and delegates
+    every musical decision to ``generate_chord_bed_plan``. The source clip is
+    never overwritten: the chords land only in the empty ``target`` slot after a
+    fingerprint-protected duplication. ``root_note`` and ``scale`` are an
+    explicit choice of the caller.
+    """
+    try:
+        return create_chord_bed_midi_clip_copy(
+            AbletonClient(),
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            bpm,
+            root_note,
+            scale,
+            seed,
+            segment_beats=segment_beats,
+            velocity=velocity,
+            sustain=sustain,
+            octave=octave,
+            chord_size=chord_size,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error
