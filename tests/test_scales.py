@@ -30,11 +30,17 @@ def _pitch_classes(root_note: str, scale: str) -> set[int]:
     return {(root + interval) % 12 for interval in SCALE_INTERVALS[scale]}
 
 
-def test_every_scale_has_seven_distinct_ascending_intervals():
+def test_every_scale_has_distinct_ascending_intervals_from_the_tonic():
     for name, intervals in SCALE_INTERVALS.items():
-        assert len(intervals) == 7, name
         assert list(intervals) == sorted(set(intervals)), name
         assert intervals[0] == 0 and max(intervals) <= 11, name
+
+
+def test_the_heptatonic_scales_still_have_seven_intervals():
+    # Cardinality is no longer a property of the table as a whole: pentatonic
+    # and blues scales live in it too, so only these are seven-note scales.
+    for name in ("major", "minor", *NEW_MODES):
+        assert len(SCALE_INTERVALS[name]) == 7, name
 
 
 def test_new_modes_are_distinct_from_major_and_minor():

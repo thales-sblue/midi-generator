@@ -6,9 +6,17 @@ ROOT_NOTES = {
     "AB": 8, "A": 9, "A#": 10, "BB": 10, "B": 11,
 }
 
-# Seven-note scales as semitone offsets from the tonic. "major" and "minor"
-# (natural minor) stay first so their historical tie-break order in scale
-# ranking is unchanged; "major" is the Ionian mode and "minor" the Aeolian.
+# Scales as semitone offsets from the tonic. "major" and "minor" (natural
+# minor) stay first so their historical tie-break order in scale ranking is
+# unchanged; "major" is the Ionian mode and "minor" the Aeolian.
+#
+# The seven-note scales come first and the non-heptatonic ones last, and that
+# order is load-bearing: `rank_scale_candidates` breaks ties by insertion
+# order, so on equal evidence a familiar seven-note reading still wins over a
+# pentatonic subset of it. Nothing here assumes a cardinality — every consumer
+# reads the tuple it is given — so "degree" always means a degree of the scale
+# actually named, which for a pentatonic is not the heptatonic degree of the
+# same number.
 SCALE_INTERVALS = {
     "major": (0, 2, 4, 5, 7, 9, 11),
     "minor": (0, 2, 3, 5, 7, 8, 10),
@@ -19,6 +27,9 @@ SCALE_INTERVALS = {
     "locrian": (0, 1, 3, 5, 6, 8, 10),
     "harmonic_minor": (0, 2, 3, 5, 7, 8, 11),
     "melodic_minor": (0, 2, 3, 5, 7, 9, 11),
+    "major_pentatonic": (0, 2, 4, 7, 9),
+    "minor_pentatonic": (0, 3, 5, 7, 10),
+    "blues": (0, 3, 5, 6, 7, 10),
 }
 
 PITCH_CLASS_NAMES = (

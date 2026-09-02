@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 12 (leito de acordes diatônicos sobre a
-mesma fundação do baixo; `generation/foundation.py` passa a ser compartilhado).
+Última atualização: 02/09/2026 — Ciclo 13 (escalas não heptatônicas admitidas:
+`major_pentatonic`, `minor_pentatonic` e `blues` em toda a pilha).
 
 ## Escopo do v1
 
@@ -49,12 +49,12 @@ clips apenas.
   significado do gerador de baixo; `sustain` amarra janelas cujo acorde inteiro
   se repete e `octave` ancora a voz mais grave do leito, recusando o
   deslocamento em que algum acorde precisaria de nota acima de 127.
-  `metadata["voicing"] = "stacked_scale_thirds"`, `chord_size`, `chord_count`.
+  `metadata["voicing"] = "stacked_scale_degrees"`, `chord_size`, `chord_count`.
   A leitura da fundação, o encaixe na escala e a âncora de registro vivem em
   `generation/foundation.py` (`build_foundation_line` → `FoundationLine`),
   compartilhado pelos dois geradores; nenhum deles duplica mais essa etapa.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
-  todas as escalas × 12 centros (108 candidatos hoje) + `top_line_intervals`
+  todas as escalas × 12 centros (144 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
   segmento de N batidas; nota sustentada conta em toda janela que cruza; `None`
   em janela muda) — insumo para geração ciente de papel pós-v1 (Ciclo 7).
@@ -62,8 +62,13 @@ clips apenas.
   legato, staccato, humanize, constrain_to_scale, transpose_diatonic,
   harmonize_diatonic, velocity_ramp.
 - Escalas: `major`, `minor` e mais os 7 modos gregos + `harmonic_minor` +
-  `melodic_minor`, propagados por geração, contextual, análise e transformações
-  diatônicas (Ciclo 2).
+  `melodic_minor` (Ciclo 2), e as não heptatônicas `major_pentatonic`,
+  `minor_pentatonic` e `blues` (Ciclo 13) — propagadas por geração, contextual,
+  análise, transformações diatônicas, geradores de papel e CLI. Nenhuma camada
+  assume cardinalidade 7: "grau" é sempre grau da escala nomeada, então um grau
+  de pentatônica não é o grau heptatônico de mesmo número. A ordem da tabela é
+  carregada de significado — heptatônicas primeiro, não heptatônicas por último,
+  porque `rank_scale_candidates` desempata por ordem de inserção.
 - Compassos: `TimeSignature` (`numerator/denominator`, denominador em
   1/2/4/8/16) no domínio; `MelodyRequest.time_signature` (default `4/4`)
   propagado por `generate_plan`, `generate_contextual_plan`, metadados do
@@ -98,7 +103,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 369 testes verdes.
+- Suíte: 383 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -276,14 +281,35 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   é atravessada, âncora de oitava, teto de 127 por acorde e por leito,
   `segment_beats`, velocity, comprimento incompatível, tudo mudo, payload v1).
   Payload v1 intacto. Como o baixo, ainda não está ligado à CLI/MCP.
-1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
-   mudarem a premissa "7 notas". Impacto avaliado no Ciclo 10: `transpose_diatonic`
-   e `harmonize_diatonic` já indexam graus de `scale_pitches`, funcionam com
-   qualquer cardinalidade; `nearest_scale_pitch` idem. O ponto sensível é
-   `rank_scale_candidates`: uma escala de 5 notas tende a cobrir 100% de clips
-   curtos e dominaria o ranking. Antes de admitir pentatônicas é preciso decidir
-   a correção de cobertura (penalizar por tamanho, ranquear por cardinalidade,
-   ou excluir não-heptatônicas do ranking).
+- [x] **Ciclo 13 — Escalas não heptatônicas.** `SCALE_INTERVALS` ganha
+  `major_pentatonic` (0,2,4,7,9), `minor_pentatonic` (0,3,5,7,10) e `blues`
+  (0,3,5,6,7,10), **anexadas ao fim** da tabela. O bloqueio registrado no Ciclo
+  10 partia de uma premissa errada: `rank_scale_candidates` ordena por
+  `matching_note_count` **absoluto**, não por `coverage`. Verificado
+  experimentalmente antes de implementar — uma escala contida em outra maior
+  nunca casa mais notas que ela, e o empate cai na ordem de inserção, então a
+  leitura heptatônica continua vencendo (num clip C-E-G, `C major` vem antes de
+  `C major_pentatonic`). Uma escala menor só lidera quando cobre o que nenhuma
+  heptatônica cobre (riff com Solb **e** Sol → `C blues` primeiro, cobertura
+  1.0), que é o comportamento desejado. Nenhuma correção de cobertura foi
+  necessária; o ranking ficou intacto. `transpose_diatonic`,
+  `harmonize_diatonic`, `constrain_to_scale`, `nearest_scale_pitch`, heurístico,
+  contextual, baixo, leito de acordes e a CLI já eram agnósticos de
+  cardinalidade e passaram a aceitar as três escalas sem mudança de código.
+  Ajustes de honestidade que as novas escalas forçaram: o metadado do leito de
+  acordes passou de `stacked_scale_thirds` para `stacked_scale_degrees` (em
+  pentatônica os graus empilhados não são terças — Dó pentatônica dá C-E-A), e
+  o teste que exigia 7 intervalos de *toda* escala virou dois (invariantes da
+  tabela inteira × cardinalidade só das heptatônicas). Os dois testes que
+  fixavam 108 candidatos passaram a derivar de `len(SCALE_INTERVALS)`; o perfil
+  do `analyze_clip` (e a tool MCP) agora devolve 144 candidatos — crescimento
+  aditivo, sem mudança de schema. `tests/test_non_heptatonic_scales.py`
+  (13 casos). Payload v1 intacto; determinismo bit-exato preservado.
+  Consequência conhecida e aceita: o proxy `pitch_class_diversity` de
+  `evaluation/scoring.py` normaliza por 7, então material pentatônico satura em
+  5/7. Como `rank_candidates` compara candidatos da *mesma* requisição (mesma
+  escala), o teto é uniforme e não distorce o ranking; corrigir a normalização
+  exigiria dar a escala ao scoring, que hoje só vê o `ClipProfile`.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.

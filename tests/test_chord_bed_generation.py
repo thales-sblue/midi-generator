@@ -42,7 +42,7 @@ def test_chord_bed_stacks_a_diatonic_triad_on_every_sounding_window():
     assert plan.report.pause_count == 1
     assert plan.report.scale == "major"
     assert plan.metadata["generation_mode"] == "chord_bed"
-    assert plan.metadata["voicing"] == "stacked_scale_thirds"
+    assert plan.metadata["voicing"] == "stacked_scale_degrees"
     assert plan.metadata["chord_size"] == 3
     assert plan.metadata["foundation_source"] == "analysis.bass_line_pitches"
     assert plan.metadata["segment_count"] == 4

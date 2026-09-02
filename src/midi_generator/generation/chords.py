@@ -16,7 +16,8 @@ from .melody import TICKS_PER_BEAT
 DEFAULT_CHORD_VELOCITY = 80
 MIN_CHORD_SIZE = 2
 MAX_CHORD_SIZE = 5
-# A stacked third is the next-but-one degree of the scale, whatever the scale.
+# Chord tones are every other degree of the scale, whatever its cardinality:
+# thirds in a seven-note scale, wider steps in a pentatonic.
 DEGREE_STEP = 2
 
 
@@ -86,7 +87,7 @@ def generate_chord_bed_plan(
     ladder = scale_pitches(request.root_note, request.scale)
     voiced = voice_windows(
         line,
-        lambda bass: _stacked_thirds(bass, ladder, chord_size),
+        lambda bass: _stacked_degrees(bass, ladder, chord_size),
         sustain=sustain,
     )
 
@@ -120,7 +121,7 @@ def generate_chord_bed_plan(
             "silent_segment_count": len(line.pitches) - line.sounding_count,
             "foundation_source": "analysis.bass_line_pitches",
             "pitch_mapping": "nearest_scale_pitch_ties_down",
-            "voicing": "stacked_scale_thirds",
+            "voicing": "stacked_scale_degrees",
             "chord_size": chord_size,
             "chord_count": len(voiced),
             "note_grouping": "sustained" if sustain else "per_window",
@@ -133,13 +134,14 @@ def generate_chord_bed_plan(
     return plan
 
 
-def _stacked_thirds(
+def _stacked_degrees(
     bass: int, ladder: tuple[int, ...], chord_size: int
 ) -> tuple[int, ...]:
     """Close-position chord of ``chord_size`` scale degrees stacked above ``bass``.
 
     ``ladder`` is every MIDI pitch of the scale, ascending, so taking every
-    other entry from the bass upward stacks scale thirds without a chord table.
+    other entry from the bass upward stacks the scale's own degrees without a
+    chord table — thirds in a seven-note scale, wider steps in a pentatonic.
     """
     degree = ladder.index(bass)
     top = degree + DEGREE_STEP * (chord_size - 1)

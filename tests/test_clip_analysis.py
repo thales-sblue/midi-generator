@@ -6,6 +6,7 @@ from midi_generator.analysis import (
     rank_scale_candidates,
 )
 from midi_generator.domain import NoteEvent
+from midi_generator.domain.music_theory import SCALE_INTERVALS
 from midi_generator.transformations import EditableMidiClip
 
 
@@ -140,8 +141,8 @@ def test_scale_candidates_rank_coverage_then_tonic_evidence():
 
     candidates = rank_scale_candidates(clip)
 
-    # 12 roots x every scale in SCALE_INTERVALS (9 today).
-    assert len(candidates) == 108
+    # 12 roots x every scale in SCALE_INTERVALS.
+    assert len(candidates) == 12 * len(SCALE_INTERVALS)
     # Coverage wins first: C major covers all eight notes and has the strongest
     # tonic evidence (two C's), so it ranks ahead of every relative mode.
     assert candidates[0].root_note == "C"

@@ -35,7 +35,10 @@ python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 -
 Os parâmetros são BPM, nota raiz, escala, número de compassos, seed e assinatura
 de tempo. As escalas disponíveis são `major` e `minor` (menor natural), os sete
 modos gregos (`major`/Jônio, `dorian`, `phrygian`, `lydian`, `mixolydian`,
-`minor`/Eólio, `locrian`) e `harmonic_minor` e `melodic_minor`. A mesma
+`minor`/Eólio, `locrian`), `harmonic_minor` e `melodic_minor`, e ainda as não
+heptatônicas `major_pentatonic`, `minor_pentatonic` e `blues`. Nenhuma camada
+assume sete notas: "grau" sempre significa um grau da escala nomeada, então um
+grau de pentatônica não é o grau heptatônico de mesmo número. A mesma
 configuração produz exatamente os mesmos eventos MIDI.
 
 `--time-signature` aceita qualquer `numerador/denominador` com denominador em
@@ -153,11 +156,17 @@ em vez de serem inventados como zero. Notas mutadas são contabilizadas, mas nã
 influenciam as métricas musicais. A análise é pura, imutável e reutiliza
 `EditableMidiClip`, sem Live API, MCP ou Mido.
 
-O perfil também classifica todas as escalas conhecidas (hoje 9) nos 12 centros
-tonais — 108 candidatos — por cobertura das notas audíveis e, em empate, pela
-quantidade de ocorrências da tônica e pela ordem da tabela de escalas (`major` e
-`minor` primeiro). Cada candidato informa `matching_note_count`,
-`tonic_note_count` e `coverage`. O resultado é
+O perfil também classifica todas as escalas conhecidas (hoje 12) nos 12 centros
+tonais — 144 candidatos — pela **quantidade absoluta** de notas audíveis
+pertencentes à escala e, em empate, pela quantidade de ocorrências da tônica e
+pela ordem da tabela de escalas (`major` e `minor` primeiro, as não
+heptatônicas por último). Ordenar por contagem absoluta, e não por proporção, é
+o que permite admitir escalas de 5 e 6 notas sem distorcer o ranking: uma
+pentatônica contida numa escala maior nunca cobre mais notas que ela, e no
+empate a leitura heptatônica vence pela ordem da tabela. Uma escala menor só
+lidera quando cobre algo que nenhuma heptatônica cobre — por exemplo um riff que
+usa Solb e Sol, onde `blues` vence legitimamente. Cada candidato informa
+`matching_note_count`, `tonic_note_count` e `coverage`. O resultado é
 deliberadamente apresentado como compatibilidade: clips curtos e escalas
 relativas podem ter evidência idêntica, portanto o motor não inventa uma
 tonalidade única quando os dados não permitem distingui-la.
@@ -210,10 +219,12 @@ compatibilidade ambígua em veredito automático.
 fundação — a leitura da linha de fundamentais, o encaixe na escala e a âncora de
 registro agora vivem em `generation/foundation.py`, compartilhado pelos dois
 geradores. Cada janela soante vira um acorde em posição fechada: a fundamental
-fixada na escala é a voz mais grave e as demais são terças da escala empilhadas
-acima dela — `chord_size` graus tomados de dois em dois (faixa aceita: 2..5), de
-modo que uma tríade numa escala heptatônica é o 1-3-5 conhecido e `chord_size=4`
-acrescenta a sétima diatônica. Como o acorde é lido da própria escala, e não de
+fixada na escala é a voz mais grave e as demais são graus da escala empilhados
+acima dela — `chord_size` graus tomados de dois em dois (faixa aceita: 2..5).
+Numa escala heptatônica isso é o 1-3-5 conhecido e `chord_size=4` acrescenta a
+sétima diatônica; numa pentatônica os mesmos graus dão passos mais largos (em
+Dó maior pentatônica, C-E-A), e é por isso que o metadado se chama
+`voicing = "stacked_scale_degrees"`. Como o acorde é lido da própria escala, e não de
 uma tabela de qualidades, a qualidade acompanha o grau em que a fundamental
 caiu: maior no I, menor no ii, e assim por diante. Janelas mudas continuam
 mudas. `sustain=True` amarra janelas consecutivas que produzem o *mesmo* acorde
@@ -677,7 +688,8 @@ track:
 externa para a altura permitida mais próxima entre `0..127`. Empates escolhem a
 altura inferior, evitando deriva melódica para cima. Aceita as mesmas raízes e o
 mesmo conjunto de escalas do gerador (`major`, `minor`, os modos gregos,
-`harmonic_minor` e `melodic_minor`) e é idempotente: reaplicar a mesma
+`harmonic_minor`, `melodic_minor`, as pentatônicas e `blues`) e é idempotente:
+reaplicar a mesma
 tonalidade não muda novamente o clip.
 
 Status da integração Live para `constrain_to_scale`: **PENDENTE DE VALIDAÇÃO
