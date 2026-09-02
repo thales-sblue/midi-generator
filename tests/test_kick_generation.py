@@ -120,3 +120,83 @@ def test_kick_rejects_a_fully_muted_reference():
 def test_kick_rejects_out_of_range_velocity(velocity):
     with pytest.raises(ValueError, match="velocity must be"):
         generate_kick_plan(request(), reference_clip(), velocity=velocity)
+
+
+def test_placement_defaults_to_per_onset():
+    default = generate_kick_plan(request(), reference_clip())
+    explicit = generate_kick_plan(
+        request(), reference_clip(), placement="per_onset"
+    )
+
+    assert default == explicit
+    assert default.metadata["placement"] == "per_onset"
+    assert default.metadata["onset_source"] == "distinct sounding note starts"
+    assert default.metadata["onset_count"] == 3
+    assert default.metadata["kick_count"] == 3
+
+
+def test_downbeat_only_places_one_kick_per_bar_ignoring_reference_onsets():
+    plan = generate_kick_plan(
+        request(bars=2), two_bar_reference(), placement="downbeat_only"
+    )
+
+    assert [n.start for n in plan.notes] == [0, 1920]
+    assert {n.pitch for n in plan.notes} == {KICK_PITCH}
+    assert plan.metadata["placement"] == "downbeat_only"
+    assert plan.metadata["onset_source"] == "downbeat_only grid"
+    assert plan.metadata["kick_count"] == 2
+    assert plan.report.note_count == 2
+    # onset_count still reports what the reference actually held.
+    assert plan.metadata["onset_count"] == 3
+
+
+def test_four_on_floor_places_one_kick_per_quarter_note():
+    plan = generate_kick_plan(
+        request(bars=2), two_bar_reference(), placement="four_on_floor"
+    )
+
+    assert [n.start for n in plan.notes] == [0, 480, 960, 1440, 1920, 2400, 2880, 3360]
+    assert all(n.duration == KICK_DURATION_TICKS for n in plan.notes[:-1])
+    assert plan.metadata["placement"] == "four_on_floor"
+    assert plan.metadata["kick_count"] == 8
+
+
+def test_grid_placements_do_not_require_a_sounding_reference():
+    silent = EditableMidiClip(
+        length_ticks=1920,
+        notes=(NoteEvent(60, 0, 480, 70, mute=True),),
+    )
+
+    plan = generate_kick_plan(request(), silent, placement="four_on_floor")
+
+    assert [n.start for n in plan.notes] == [0, 480, 960, 1440]
+    assert plan.metadata["onset_count"] == 0
+
+
+def test_grid_placements_are_deterministic():
+    reference = two_bar_reference()
+    first = generate_kick_plan(
+        request(bars=2, seed=1), reference, placement="downbeat_only"
+    )
+    again = generate_kick_plan(
+        request(bars=2, seed=1), reference, placement="downbeat_only"
+    )
+
+    assert first == again
+
+
+def test_kick_rejects_an_unknown_placement():
+    with pytest.raises(ValueError, match="placement must be one of"):
+        generate_kick_plan(request(), reference_clip(), placement="backbeat")
+
+
+def two_bar_reference():
+    """Two 4/4 bars with onsets that never land on a bar downbeat."""
+    return EditableMidiClip(
+        length_ticks=3840,
+        notes=(
+            NoteEvent(60, 240, 240, 70),
+            NoteEvent(64, 1200, 240, 70),
+            NoteEvent(67, 2160, 240, 70),
+        ),
+    )

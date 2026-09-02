@@ -4,8 +4,9 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 16 (kick exposto ao MCP/Ableton pelo
-fluxo não destrutivo compartilhado: `create_kick_from_ableton_clip`).
+Última atualização: 02/09/2026 — Ciclo 17 (modos de colocação do kick:
+`placement` = `per_onset` (default) | `downbeat_only` | `four_on_floor` em
+`generate_kick_plan`; core apenas, sem fio ao MCP ainda).
 
 ## Escopo do v1
 
@@ -65,6 +66,16 @@ clips apenas.
   Payload v1 / exporter / evaluation / provenance como qualquer `CompositionPlan`.
   Ainda não ligado à CLI/MCP — fluxo Ableton é incremento próprio, atrás do gate
   do Live.
+  `placement` (Ciclo 17): `"per_onset"` (default) mantém o comportamento acima;
+  `"downbeat_only"` põe um kick no primeiro tempo de cada compasso e
+  `"four_on_floor"` um kick a cada semínima (`TICKS_PER_BEAT`). As duas grades
+  saem do comprimento/compasso do clip e **não** leem os onsets da referência
+  (referência toda muda é aceita nesses modos). `metadata["placement"]` novo;
+  `metadata["onset_count"]` passa a contar os onsets audíveis da referência
+  (igual ao número de kicks só no `per_onset`) e `metadata["kick_count"]` conta
+  os kicks emitidos. `placement` desconhecido → `ValueError`. Sem RNG, sem fio
+  ao MCP ainda — a tool `create_kick_from_ableton_clip` continua só no
+  `per_onset`.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (144 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -139,7 +150,7 @@ clips apenas.
   `reference_length_ticks`) sem recalcular. Payload v1 intacto; determinismo
   bit-exato preservado. Criação e conteúdo no Live **pendentes de validação
   manual**.
-- Suíte: 437 testes verdes.
+- Suíte: 443 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -448,6 +459,24 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   intacto; determinismo bit-exato preservado. Suíte 437 verdes. Fronteira:
   criação e conteúdo no Live **pendentes de validação manual** (roteiro no gate
   acima). Nenhuma dependência nova; sem CLI de kick; sem snare/clap/hi-hat.
+- [x] **Ciclo 17 — Modos de colocação do kick.**
+  `generate_kick_plan(..., placement="per_onset")`. `"per_onset"` (default)
+  mantém a bit-exatidão dos Ciclos 15-16 (um kick por onset audível distinto);
+  `"downbeat_only"` emite um kick no primeiro tempo de cada compasso e
+  `"four_on_floor"` um kick a cada semínima (`TICKS_PER_BEAT`), ambos a partir
+  do comprimento/compasso do clip, sem ler os onsets da referência (referência
+  toda muda deixa de ser erro nesses modos). Clamp de duração inalterado (para
+  no próximo kick ou na borda). `metadata["placement"]` novo;
+  `metadata["onset_count"]` passa a contar os onsets audíveis da referência
+  (== nº de kicks só no `per_onset`), `metadata["kick_count"]` conta os kicks
+  emitidos; `onset_source` reflete o modo. `placement` fora de
+  `("per_onset","downbeat_only","four_on_floor")` → `ValueError`. Sem RNG, sem
+  dependência nova, sem algoritmo/validação no MCP — a tool
+  `create_kick_from_ableton_clip` ainda só expõe `per_onset` (fio do parâmetro
+  ao MCP é o próximo incremento). `tests/test_kick_generation.py` (+6 casos:
+  default == per_onset explícito, grade por compasso, grade por semínima, grades
+  aceitam referência muda, determinismo das grades, `placement` inválido).
+  Payload v1 intacto; determinismo bit-exato preservado. Suíte 443 verdes.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
@@ -455,6 +484,8 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
    Fluxo MCP não destrutivo para o kick, espelhando
    `create_bass_line_from_ableton_clip` (atrás do gate do Live). (b) Snare/clap
    na contramão métrica (backbeat) e hi-hat numa subdivisão da grade,
-   condicionados ao compasso e à densidade de onsets. (c) Modos de colocação do
-   kick (downbeat-only, four-on-the-floor) como parâmetro, já que a base por
-   onset está pronta.
+   condicionados ao compasso e à densidade de onsets. (c) [core feito no Ciclo
+   17] Modos de colocação do kick (`downbeat_only`, `four_on_floor`) como
+   parâmetro `placement` de `generate_kick_plan`; falta encaminhá-lo por
+   `create_kick_from_ableton_clip` (fluxo `_generate_into_protected_copy`),
+   atrás do gate do Live.

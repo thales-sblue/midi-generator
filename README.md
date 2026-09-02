@@ -240,10 +240,19 @@ passa pela `generation/foundation.py` e ignora a tonalidade da requisição:
 cada início distinto de nota audível do clip de referência vira um único kick
 (`KICK_PITCH = 36`, bumbo acústico do General MIDI). Um acorde contribui com um
 único onset, notas mudas não contribuem. Cada kick dura `KICK_DURATION_TICKS`
-(240, uma colcheia), encurtado quando necessário para parar no próximo onset ou
+(240, uma colcheia), encurtado quando necessário para parar no próximo kick ou
 na borda do clip. O plano cobre exatamente o clip de referência, então
-`request.bars` e `request.time_signature` têm de descrever esse comprimento. A
-`velocity` é fixa (padrão 100). É determinístico por construção e não sorteia
+`request.bars` e `request.time_signature` têm de descrever esse comprimento.
+
+O parâmetro `placement` (padrão `"per_onset"`, o comportamento acima) troca o
+alinhamento aos onsets por uma grade fixa derivada do comprimento e do compasso
+do clip: `"downbeat_only"` põe um kick no primeiro tempo de cada compasso e
+`"four_on_floor"` põe um kick a cada semínima. Nas duas grades os onsets do
+clip de referência não são lidos (então uma referência toda muda é aceita) e
+`metadata["onset_count"]` continua reportando quantos onsets audíveis a
+referência tinha, enquanto `metadata["kick_count"]` conta os kicks emitidos.
+
+A `velocity` é fixa (padrão 100). É determinístico por construção e não sorteia
 nada; `request.seed` só viaja para o relatório e os metadados. Não está ligado à
 CLI; o fluxo Ableton não destrutivo é exposto pela tool MCP
 `create_kick_from_ableton_clip` (ver "Geração ciente de papel a partir de um clip
