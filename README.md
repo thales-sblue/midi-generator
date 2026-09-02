@@ -206,6 +206,23 @@ esse mesmo comprimento. A tonalidade continua sendo decisão explícita do
 chamador, que pode usar os candidatos de `analyze_clip` sem transformar uma
 compatibilidade ambígua em veredito automático.
 
+`generate_chord_bed_plan` é o segundo papel construído sobre essa mesma
+fundação — a leitura da linha de fundamentais, o encaixe na escala e a âncora de
+registro agora vivem em `generation/foundation.py`, compartilhado pelos dois
+geradores. Cada janela soante vira um acorde em posição fechada: a fundamental
+fixada na escala é a voz mais grave e as demais são terças da escala empilhadas
+acima dela — `chord_size` graus tomados de dois em dois (faixa aceita: 2..5), de
+modo que uma tríade numa escala heptatônica é o 1-3-5 conhecido e `chord_size=4`
+acrescenta a sétima diatônica. Como o acorde é lido da própria escala, e não de
+uma tabela de qualidades, a qualidade acompanha o grau em que a fundamental
+caiu: maior no I, menor no ii, e assim por diante. Janelas mudas continuam
+mudas. `sustain=True` amarra janelas consecutivas que produzem o *mesmo* acorde
+numa sonoridade presa (todas as vozes esticam juntas); `octave` ancora a voz
+mais grave do leito inteiro na oitava MIDI pedida com um único deslocamento,
+preservando o voicing, e é erro se algum acorde precisar de uma nota acima de
+MIDI 127. A `velocity` é fixa (padrão 80). Também é determinístico por
+construção e não sorteia nada.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.

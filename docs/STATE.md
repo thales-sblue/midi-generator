@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 11 (âncora de registro do gerador de
-baixo: `octave` transpõe a linha inteira por oitavas inteiras).
+Última atualização: 02/09/2026 — Ciclo 12 (leito de acordes diatônicos sobre a
+mesma fundação do baixo; `generation/foundation.py` passa a ser compartilhado).
 
 ## Escopo do v1
 
@@ -40,6 +40,19 @@ clips apenas.
   ancorar a nota mais grave nessa oitava MIDI (contorno/intervalos preservados),
   e recusa o deslocamento que levaria alguma nota acima de 127.
   `metadata["target_octave"]` / `metadata["octave_offset_semitones"]`.
+  `generate_chord_bed_plan` (`generation/chords.py`, Ciclo 12) — segundo papel
+  sobre a mesma fundação: cada janela soante vira um acorde em posição fechada,
+  com a fundamental fixada na escala como voz mais grave e `chord_size` (2..5,
+  default 3) graus tomados de dois em dois na escala acima dela. A qualidade
+  vem do grau (maior no I, menor no ii), não de uma tabela de acordes.
+  `sustain`, `octave`, `segment_beats` e `velocity` (default 80) têm o mesmo
+  significado do gerador de baixo; `sustain` amarra janelas cujo acorde inteiro
+  se repete e `octave` ancora a voz mais grave do leito, recusando o
+  deslocamento em que algum acorde precisaria de nota acima de 127.
+  `metadata["voicing"] = "stacked_scale_thirds"`, `chord_size`, `chord_count`.
+  A leitura da fundação, o encaixe na escala e a âncora de registro vivem em
+  `generation/foundation.py` (`build_foundation_line` → `FoundationLine`),
+  compartilhado pelos dois geradores; nenhum deles duplica mais essa etapa.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (108 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -85,7 +98,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 352 testes verdes.
+- Suíte: 369 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -246,6 +259,23 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   +6 casos (default `None`, ancoragem para baixo em 3/4, elevação de source
   grave, recusa acima de 127, tipo/faixa de `octave`, combinação com `sustain`).
   Payload v1 intacto.
+- [x] **Ciclo 12 — Leito de acordes diatônicos (segundo papel).**
+  `generation/chords.py`: `generate_chord_bed_plan(request, reference, *,
+  segment_beats=1, velocity=80, sustain=False, octave=None, chord_size=3)`.
+  Empilha `chord_size` graus da escala de dois em dois acima da fundamental
+  fixada de cada janela — a qualidade do acorde sai do grau, sem tabela de
+  acordes, e vale para qualquer escala da tabela. Refatoração casada:
+  `generation/foundation.py` (`build_foundation_line` → `FoundationLine` com
+  `pitches`/`segment_ticks`/`total_ticks`/`octave_offset`, `window_bounds`,
+  `sounding_count`) concentra validação, leitura de `bass_line_pitches`, encaixe
+  na escala e âncora de oitava; `bass_line.py` passou a consumi-la e perdeu ~80
+  linhas, com os 23 testes do Ciclo 9-11 verdes sem alteração (bit-exatidão
+  preservada). Sem RNG, sem dependência nova, sem algoritmo musical no MCP.
+  `tests/test_chord_bed_generation.py` (17 casos: tríade por janela, escala/grau,
+  sétima, faixa de `chord_size`, sustain amarra todas as vozes, janela muda não
+  é atravessada, âncora de oitava, teto de 127 por acorde e por leito,
+  `segment_beats`, velocity, comprimento incompatível, tudo mudo, payload v1).
+  Payload v1 intacto. Como o baixo, ainda não está ligado à CLI/MCP.
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas". Impacto avaliado no Ciclo 10: `transpose_diatonic`
    e `harmonize_diatonic` já indexam graus de `scale_pitches`, funcionam com
