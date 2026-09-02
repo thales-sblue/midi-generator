@@ -193,6 +193,11 @@ ela cruza, e a última janela parcial é encurtada até a borda do clip. A `velo
 altura da escala são amarradas numa única nota presa — uma janela muda sempre
 corta a nota —, de modo que o ritmo harmônico da saída segue a referência em vez
 do tamanho da janela; o padrão `sustain=False` mantém o pulso nota-por-janela.
+`octave` é `None` por padrão e mantém o registro do source; passando uma oitava
+MIDI inteira (dó central = oitava `4`), a linha inteira é transposta por um único
+deslocamento de oitavas para que a nota mais grave caia nessa oitava — contorno e
+intervalos preservados porque o mesmo deslocamento vale para todas as notas, e é
+erro se ele levar alguma nota acima de MIDI 127.
 O gerador é determinístico por construção e não sorteia nada;
 a `seed` da requisição só viaja para o relatório e os metadados, como
 continuidade de proveniência. O plano gerado cobre exatamente o clip de

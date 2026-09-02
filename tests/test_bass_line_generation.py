@@ -241,6 +241,96 @@ def test_sustain_must_be_boolean():
         )
 
 
+def test_octave_defaults_to_none_and_keeps_the_source_register():
+    plan = generate_bass_line_plan(
+        MelodyRequest(120, "C", "major", 1, 5), reference_clip()
+    )
+    assert plan.metadata["target_octave"] is None
+    assert plan.metadata["octave_offset_semitones"] == 0
+    assert [n.pitch for n in plan.notes] == [36, 40, 43]
+
+
+def test_octave_anchors_the_lowest_note_into_the_target_octave():
+    # A reference sitting around middle C, asked for octave 2 (MIDI 36..47).
+    reference = EditableMidiClip(
+        length_ticks=1440,
+        notes=(
+            NoteEvent(60, 0, 480, 70),
+            NoteEvent(64, 480, 480, 70),
+            NoteEvent(67, 960, 480, 70),
+        ),
+    )
+    request = MelodyRequest(
+        120, "C", "major", 1, 5, time_signature=TimeSignature(3, 4)
+    )
+
+    plan = generate_bass_line_plan(request, reference, octave=2)
+
+    # One offset (-24) applies to every note: contour and intervals preserved.
+    assert [n.pitch for n in plan.notes] == [36, 40, 43]
+    assert plan.metadata["target_octave"] == 2
+    assert plan.metadata["octave_offset_semitones"] == -24
+    assert 36 <= min(n.pitch for n in plan.notes) <= 47
+
+
+def test_octave_can_lift_a_low_reference_upward():
+    reference = EditableMidiClip(
+        length_ticks=960,
+        notes=(NoteEvent(24, 0, 480, 70), NoteEvent(28, 480, 480, 70)),
+    )
+    request = MelodyRequest(
+        120, "C", "major", 1, 5, time_signature=TimeSignature(2, 4)
+    )
+
+    plan = generate_bass_line_plan(request, reference, octave=3)
+
+    assert plan.metadata["octave_offset_semitones"] == 24
+    assert [n.pitch for n in plan.notes] == [48, 52]
+
+
+def test_octave_rejects_a_shift_that_would_exceed_midi_127():
+    reference = EditableMidiClip(
+        length_ticks=960,
+        notes=(NoteEvent(36, 0, 480, 70), NoteEvent(120, 480, 480, 70)),
+    )
+    request = MelodyRequest(
+        120, "C", "major", 1, 5, time_signature=TimeSignature(2, 4)
+    )
+
+    with pytest.raises(ValueError, match="exceeding MIDI 127"):
+        generate_bass_line_plan(request, reference, octave=9)
+
+
+def test_octave_must_be_an_integer_in_range():
+    request = MelodyRequest(120, "C", "major", 1, 5)
+    with pytest.raises(ValueError, match="octave must be an integer"):
+        generate_bass_line_plan(request, reference_clip(), octave=True)
+    with pytest.raises(ValueError, match="octave must be an integer"):
+        generate_bass_line_plan(request, reference_clip(), octave=42)
+
+
+def test_octave_combines_with_sustain():
+    reference = EditableMidiClip(
+        length_ticks=1440,
+        notes=(
+            NoteEvent(60, 0, 480, 70),
+            NoteEvent(60, 480, 480, 70),
+            NoteEvent(64, 960, 480, 70),
+        ),
+    )
+    request = MelodyRequest(
+        120, "C", "major", 1, 5, time_signature=TimeSignature(3, 4)
+    )
+
+    plan = generate_bass_line_plan(request, reference, octave=2, sustain=True)
+
+    assert [(n.pitch, n.start, n.duration) for n in plan.notes] == [
+        (36, 0, 960),
+        (40, 960, 480),
+    ]
+    assert plan.metadata["octave_offset_semitones"] == -24
+
+
 def test_bass_line_plan_serialises_as_payload_v1():
     plan = generate_bass_line_plan(
         MelodyRequest(120, "C", "major", 1, 42), reference_clip()

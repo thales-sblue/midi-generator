@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 01/09/2026 — Ciclo 10 (modo `sustain` do gerador de baixo:
-notas presas quando a fundamental fixada na escala não muda).
+Última atualização: 02/09/2026 — Ciclo 11 (âncora de registro do gerador de
+baixo: `octave` transpõe a linha inteira por oitavas inteiras).
 
 ## Escopo do v1
 
@@ -35,6 +35,11 @@ clips apenas.
   da escala viram uma nota presa (uma janela muda sempre corta a nota), então o
   ritmo harmônico da saída segue a referência e não o tamanho da janela.
   `metadata["note_grouping"]` = `per_window` | `sustained`.
+  `octave` (Ciclo 11): `None` (default) mantém o registro do source; um inteiro
+  −1..9 transpõe a linha inteira por um único deslocamento de oitavas para
+  ancorar a nota mais grave nessa oitava MIDI (contorno/intervalos preservados),
+  e recusa o deslocamento que levaria alguma nota acima de 127.
+  `metadata["target_octave"]` / `metadata["octave_offset_semitones"]`.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (108 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -80,7 +85,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 346 testes verdes.
+- Suíte: 352 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -229,6 +234,18 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   `tests/test_bass_line_generation.py` +5 casos (default é pulso, merge de
   alturas iguais, merge de fundamentais distintas que fixam na mesma altura,
   janela muda não é atravessada, `sustain` não-booleano). Payload v1 intacto.
+- [x] **Ciclo 11 — Âncora de registro do gerador de baixo.**
+  `generate_bass_line_plan(..., octave=None)`. Com um inteiro −1..9, calcula um
+  único deslocamento de oitavas (ceil-division) que ancora a nota mais grave da
+  linha fixada na escala dentro dessa oitava MIDI e aplica esse mesmo
+  deslocamento a todas as notas — contorno e intervalos preservados; recusa
+  (`ValueError`) o deslocamento que levaria alguma nota acima de 127. `None`
+  mantém o registro do source (comportamento dos Ciclos 9-10). Determinístico,
+  sem RNG, isolado — nenhuma outra camada muda. `metadata["target_octave"]` e
+  `metadata["octave_offset_semitones"]` novos. `tests/test_bass_line_generation.py`
+  +6 casos (default `None`, ancoragem para baixo em 3/4, elevação de source
+  grave, recusa acima de 127, tipo/faixa de `octave`, combinação com `sustain`).
+  Payload v1 intacto.
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
    mudarem a premissa "7 notas". Impacto avaliado no Ciclo 10: `transpose_diatonic`
    e `harmonize_diatonic` já indexam graus de `scale_pitches`, funcionam com
