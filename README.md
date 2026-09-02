@@ -234,6 +234,20 @@ preservando o voicing, e é erro se algum acorde precisar de uma nota acima de
 MIDI 127. A `velocity` é fixa (padrão 80). Também é determinístico por
 construção e não sorteia nada.
 
+`generate_kick_plan` (`generation/drums.py`) é a primeira geração de
+percussão ciente de papel. Uma voz de bateria não tem altura, então ela não
+passa pela `generation/foundation.py` e ignora a tonalidade da requisição:
+cada início distinto de nota audível do clip de referência vira um único kick
+(`KICK_PITCH = 36`, bumbo acústico do General MIDI). Um acorde contribui com um
+único onset, notas mudas não contribuem. Cada kick dura `KICK_DURATION_TICKS`
+(240, uma colcheia), encurtado quando necessário para parar no próximo onset ou
+na borda do clip. O plano cobre exatamente o clip de referência, então
+`request.bars` e `request.time_signature` têm de descrever esse comprimento. A
+`velocity` é fixa (padrão 100). É determinístico por construção e não sorteia
+nada; `request.seed` só viaja para o relatório e os metadados. Ainda não está
+ligado à CLI ou ao MCP — o fluxo Ableton não destrutivo é incremento próprio,
+atrás da fronteira de validação no Live, como foram o baixo e o leito de acordes.
+
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
 O contrato v1 torna `time_signature` e `ticks_per_beat` campos obrigatórios de primeiro nível. Consumidores externos precisam desses valores para interpretar corretamente as posições e durações, expressas em ticks. O serializer extrai os valores do próprio `CompositionPlan`, valida o payload e falha explicitamente se o plano não fornecer essas informações temporais.

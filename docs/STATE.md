@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 14 (geradores de baixo e leito de acordes
-expostos via MCP num fluxo não destrutivo a partir de um clip de referência).
+Última atualização: 02/09/2026 — Ciclo 15 (primeira percussão ciente de papel:
+`generate_kick_plan` — um kick por onset distinto do clip de referência).
 
 ## Escopo do v1
 
@@ -53,6 +53,18 @@ clips apenas.
   A leitura da fundação, o encaixe na escala e a âncora de registro vivem em
   `generation/foundation.py` (`build_foundation_line` → `FoundationLine`),
   compartilhado pelos dois geradores; nenhum deles duplica mais essa etapa.
+  `generate_kick_plan` (`generation/drums.py`, Ciclo 15) — primeira percussão
+  ciente de papel: um kick (`KICK_PITCH = 36`, bumbo do GM) em cada início
+  distinto de nota audível do clip de referência. Acorde = um onset, nota muda
+  não conta. Duração `KICK_DURATION_TICKS` (240) encurtada até o próximo onset
+  ou a borda do clip. Voz sem altura → **não** passa pela `foundation.py` e
+  ignora `root_note`/`scale` (carregados só para proveniência). Sem RNG;
+  `velocity` fixa (default 100); `seed` só no report/metadados. O plano cobre
+  exatamente o clip de referência (`request.bars`/`time_signature` iguais).
+  `metadata["generation_mode"] = "kick"`, `onset_count`, `kick_pitch`. Flui pelo
+  Payload v1 / exporter / evaluation / provenance como qualquer `CompositionPlan`.
+  Ainda não ligado à CLI/MCP — fluxo Ableton é incremento próprio, atrás do gate
+  do Live.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (144 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -116,7 +128,7 @@ clips apenas.
   os parâmetros e os metadados do plano (`bars`, `note_grouping`,
   `octave_offset_semitones`, `chord_count`, `voicing`). `root_note`/`scale`
   continuam explícitos. Payload v1 intacto; determinismo bit-exato preservado.
-- Suíte: 410 testes verdes.
+- Suíte: 422 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -366,10 +378,28 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   `tests/test_ableton_mcp.py` (+3). Payload v1 intacto; determinismo bit-exato
   preservado. Fronteira: criação e conteúdo no Live **pendentes de validação
   manual** (ver seção do gate acima).
+- [x] **Ciclo 15 — Primeira percussão ciente de papel (kick).**
+  `generation/drums.py`: `generate_kick_plan(request, reference, *,
+  velocity=100)` — um kick (`KICK_PITCH = 36`) por início distinto de nota
+  audível do clip de referência; acorde = um onset, nota muda não conta.
+  Duração `KICK_DURATION_TICKS = 240` encurtada até o próximo onset ou a borda
+  do clip. Sem `foundation.py`, sem RNG, sem tonalidade (voz sem altura;
+  `root_note`/`scale` só para proveniência). Plano cobre exatamente o clip
+  (`request.bars`/`time_signature` iguais). Rejeita comprimento incompatível,
+  referência toda muda e `velocity` fora de 1..127. `metadata` = `kick`,
+  `onset_count`, `kick_pitch`, `reference_length_ticks`. Flui pelo Payload v1
+  como qualquer `CompositionPlan`. `tests/test_kick_generation.py` (12 casos:
+  um kick por onset, pitch 36, acorde → um kick, clamp de duração, mudas
+  ignoradas, determinismo, seed só no report, serialização v1, comprimento
+  incompatível, referência muda, faixa de velocity). Payload v1 intacto;
+  determinismo bit-exato preservado. Não ligado à CLI/MCP — fluxo Ableton é
+  incremento próprio, atrás do gate do Live.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
-3. **Geração ciente de papel de bateria/percussão** — kick, snare/clap e hi-hat
-   condicionados ao contexto musical existente (linha de fundamentais, densidade
-   de onsets, compasso). Fundação de leitura já pronta em `generation/foundation.py`
-   e `analysis/`; começar pelo kick seguindo a linha de fundamentais.
+3. **Percussão ciente de papel — próximos passos.** (a) Fluxo MCP não
+   destrutivo para o kick, espelhando `create_bass_line_from_ableton_clip`
+   (atrás do gate do Live). (b) Snare/clap na contramão métrica (backbeat) e
+   hi-hat numa subdivisão da grade, condicionados ao compasso e à densidade de
+   onsets. (c) Modos de colocação do kick (downbeat-only, four-on-the-floor)
+   como parâmetro, já que a base por onset está pronta.
