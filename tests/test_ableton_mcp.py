@@ -6,9 +6,11 @@ from midi_generator.domain import MelodyRequest
 from midi_generator.domain.music_theory import SCALE_INTERVALS
 from midi_generator.generation import generate_plan
 from midi_generator.integration import composition_to_payload
+from midi_generator.generation.drums import DEFAULT_KICK_VELOCITY, KICK_PITCH
 from midi_generator.mcp.server import (
     analyze_ableton_midi_clip,
     create_contextual_variation_from_ableton_clip,
+    create_kick_from_ableton_clip,
     duplicate_ableton_midi_clip,
     generate_and_insert_melody,
     generate_contextual_melody_from_ableton_clip,
@@ -422,6 +424,103 @@ def test_mcp_client_creates_chord_bed_only_in_target(monkeypatch):
     assert result.structured_content["chord_size"] == 4
     assert result.structured_content["voicing"] == "stacked_scale_degrees"
     assert result.structured_content["target_clip_fingerprint"] == "result"
+
+
+def test_mcp_client_creates_kick_only_in_target(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            tools = await client.list_tools()
+            result = await client.call_tool(
+                "create_kick_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "bpm": 120,
+                    "root_note": "C",
+                    "scale": "major",
+                    "seed": 42,
+                },
+            )
+            return tools, result
+
+    tools, result = asyncio.run(call_tool())
+
+    assert "create_kick_from_ableton_clip" in {tool.name for tool in tools.tools}
+    assert result.is_error is False
+    assert fake.reads == [(0, 0), (0, 1)]
+    assert fake.duplicated == (0, 0, 0, 1, "source")
+    assert fake.replaced[:3] == (0, 1, "copy")
+    assert [note["pitch"] for note in fake.replaced[3]] == [KICK_PITCH]
+    # Default velocity is applied when the caller omits it.
+    assert all(
+        note["velocity"] == DEFAULT_KICK_VELOCITY for note in fake.replaced[3]
+    )
+    assert result.structured_content["generated"] is True
+    assert result.structured_content["role"] == "kick"
+    assert result.structured_content["bars"] == 1
+    assert result.structured_content["velocity"] == DEFAULT_KICK_VELOCITY
+    assert result.structured_content["onset_count"] == 1
+    assert result.structured_content["kick_pitch"] == KICK_PITCH
+    assert result.structured_content["reference_length_ticks"] == 1920
+    assert result.structured_content["source_clip_fingerprint"] == "source"
+    assert result.structured_content["target_clip_fingerprint"] == "result"
+
+
+def test_create_kick_tool_forwards_velocity_and_delegates(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+    captured = {}
+
+    def spy(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        from midi_generator.mcp.ableton_transform import create_kick_midi_clip_copy
+
+        return create_kick_midi_clip_copy(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "midi_generator.mcp.server.create_kick_midi_clip_copy", spy
+    )
+
+    result = create_kick_from_ableton_clip(0, 0, 0, 1, 120, "C", "major", 42, velocity=70)
+
+    assert captured["args"][1:] == (0, 0, 0, 1, 120, "C", "major", 42)
+    assert captured["kwargs"] == {"velocity": 70}
+    assert all(note["velocity"] == 70 for note in fake.replaced[3])
+    assert result["velocity"] == 70
+
+
+def test_create_kick_tool_converts_value_error_to_tool_error(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    async def call_tool():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "create_kick_from_ableton_clip",
+                {
+                    "source_track_index": 0,
+                    "source_scene_index": 0,
+                    "target_track_index": 0,
+                    "target_scene_index": 1,
+                    "bpm": 120,
+                    "root_note": "C",
+                    "scale": "major",
+                    "seed": 42,
+                    "velocity": 0,
+                },
+            )
+
+    result = asyncio.run(call_tool())
+
+    assert result.is_error is True
+    assert "velocity must be" in result.content[0].text
+    assert not hasattr(fake, "replaced")
 
 
 def test_role_generation_tools_reject_invalid_key_via_tool_error(monkeypatch):

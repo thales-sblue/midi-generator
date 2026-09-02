@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 15 (primeira percussão ciente de papel:
-`generate_kick_plan` — um kick por onset distinto do clip de referência).
+Última atualização: 02/09/2026 — Ciclo 16 (kick exposto ao MCP/Ableton pelo
+fluxo não destrutivo compartilhado: `create_kick_from_ableton_clip`).
 
 ## Escopo do v1
 
@@ -128,7 +128,18 @@ clips apenas.
   os parâmetros e os metadados do plano (`bars`, `note_grouping`,
   `octave_offset_semitones`, `chord_count`, `voicing`). `root_note`/`scale`
   continuam explícitos. Payload v1 intacto; determinismo bit-exato preservado.
-- Suíte: 422 testes verdes.
+- MCP kick (Ciclo 16): `create_kick_from_ableton_clip` leva `generate_kick_plan`
+  ao mesmo `_generate_into_protected_copy` — `create_kick_midi_clip_copy` em
+  `mcp/ableton_transform.py` só lê o source, monta a requisição (comprimento =
+  clip, 4/4 inteiro), chama o gerador do core e escreve só na cópia protegida
+  por fingerprint. Encaminha `velocity` (default 100) direto ao gerador; nenhum
+  algoritmo/validação musical no MCP. `root_note`/`scale` seguem no request só
+  para proveniência — a tonalidade não é inferida. A resposta (`KickClipResult`)
+  ecoa `bars`/`velocity` e os metadados do plano (`onset_count`, `kick_pitch`,
+  `reference_length_ticks`) sem recalcular. Payload v1 intacto; determinismo
+  bit-exato preservado. Criação e conteúdo no Live **pendentes de validação
+  manual**.
+- Suíte: 437 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -148,6 +159,7 @@ clips apenas.
 - `create_contextual_variation_from_ableton_clip`
 - `create_bass_line_from_ableton_clip` (Ciclo 14)
 - `create_chord_bed_from_ableton_clip` (Ciclo 14)
+- `create_kick_from_ableton_clip` (Ciclo 16)
 
 Domínio, preflight e orquestração MCP já cobertos por testes; falta conferir a
 escrita no piano roll do Live contra o Ableton real. Ableton indisponível nesta
@@ -167,6 +179,7 @@ Cobertura automatizada conferida neste ciclo (não duplicar):
 | `create_contextual_variation_from_ableton_clip` | `test_contextual_generation.py` | `test_ableton_transform.py` (preflight, determinismo, 4/4, cópia protegida) | `test_ableton_mcp.py` | idem |
 | `create_bass_line_from_ableton_clip` | `test_bass_line_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `segment_beats`/`velocity`/`sustain`/`octave`, `CLIP_CHANGED`) | `test_ableton_mcp.py` | idem |
 | `create_chord_bed_from_ableton_clip` | `test_chord_bed_generation.py` | `test_ableton_role_generation.py` (idem + `chord_size`) | `test_ableton_mcp.py` | idem |
+| `create_kick_from_ableton_clip` | `test_kick_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `velocity`, tonalidade ignorada, `CLIP_CHANGED`, erro do replace) | `test_ableton_mcp.py` (registro, default de `velocity`, delegação, `ToolError`) | idem |
 
 Procedimento mínimo para fechar o gate (com Live 12 aberto + Control Surface
 `MidiGeneratorBridge` ativo):
@@ -202,6 +215,28 @@ o harness `mcp.verification` ainda **não** as cobre, então a conferência é m
    baixo por janela soante fixada na escala; `0 2` com um acorde em posição
    fechada por janela soante. Repetir a chamada com a mesma seed e conferir que
    o conteúdo é bit a bit igual (comparar `target_clip_fingerprint`).
+6. Repetir a chamada apontando `target` para um slot ocupado e confirmar a recusa
+   (`TARGET_CLIP_SLOT_NOT_EMPTY`), com o source intacto.
+
+Procedimento mínimo para o gate de `create_kick_from_ableton_clip` (Ciclo 16) —
+mesmo fluxo `_generate_into_protected_copy`, também não coberto pelo harness
+`mcp.verification`:
+
+1. `python -m midi_generator.ableton doctor` → `connected`.
+2. Numa track MIDI da Session View, criar um clip de referência de N compassos
+   4/4 com um ritmo audível (qualquer voz); anotar track/scene (ex.: `0 0`) e
+   deixar `0 3` vazio.
+3. Chamar `create_kick_from_ableton_clip` com `source 0 0`, `target 0 3`,
+   `bpm`/`root_note`/`scale`/`seed` explícitos (ex.: `120 / C / minor / 42`),
+   `velocity` opcional (default 100). `root_note`/`scale` viajam só para
+   proveniência.
+4. Conferir no piano roll: `0 0` idêntico ao original; `0 3` com um kick
+   (`pitch 36`) em cada início distinto de nota audível do source, duração
+   encurtada até o próximo onset ou a borda do clip. Conferir que
+   `onset_count` na resposta bate com o número de onsets distintos do source.
+5. Repetir a chamada com a mesma seed e `velocity` e conferir que o conteúdo é
+   bit a bit igual (comparar `target_clip_fingerprint`). Repetir mudando só
+   `root_note`/`scale` e conferir que o conteúdo não muda.
 6. Repetir a chamada apontando `target` para um slot ocupado e confirmar a recusa
    (`TARGET_CLIP_SLOT_NOT_EMPTY`), com o source intacto.
 
@@ -394,12 +429,32 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   incompatível, referência muda, faixa de velocity). Payload v1 intacto;
   determinismo bit-exato preservado. Não ligado à CLI/MCP — fluxo Ableton é
   incremento próprio, atrás do gate do Live.
+- [x] **Ciclo 16 — Kick exposto ao MCP/Ableton pelo fluxo não destrutivo
+  compartilhado.** `mcp/ableton_transform.py`: `create_kick_midi_clip_copy` e o
+  TypedDict `KickClipResult`; `mcp/server.py`: tool `create_kick_from_ableton_clip`
+  (params `source_*`/`target_*`/`bpm`/`root_note`/`scale`/`seed`,
+  `velocity` default `DEFAULT_KICK_VELOCITY` = 100). O algoritmo musical continua
+  em `generation/drums.py::generate_kick_plan` — o MCP só orquestra: reusa
+  `_generate_into_protected_copy` (lê o source uma vez → 4/4 inteiro → gera o
+  plano no preflight → duplica com `expected_source_fingerprint` → relê a cópia →
+  confere comprimento → substitui só a cópia). Source nunca vai a
+  `replace_midi_clip_notes`; a cópia é protegida por fingerprint; `CLIP_CHANGED`
+  propaga. `velocity` é encaminhada direto ao gerador; `root_note`/`scale` seguem
+  no request só para proveniência (tonalidade não é inferida). A resposta ecoa
+  `bars`/`velocity` e os metadados do plano (`onset_count`, `kick_pitch`,
+  `reference_length_ticks`) sem recalcular. `tests/test_ableton_role_generation.py`
+  (+12 casos de orquestração) e `tests/test_ableton_mcp.py` (+3: registro/expo,
+  default de `velocity` e delegação, `ValueError`→`ToolError`). Payload v1
+  intacto; determinismo bit-exato preservado. Suíte 437 verdes. Fronteira:
+  criação e conteúdo no Live **pendentes de validação manual** (roteiro no gate
+  acima). Nenhuma dependência nova; sem CLI de kick; sem snare/clap/hi-hat.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
-3. **Percussão ciente de papel — próximos passos.** (a) Fluxo MCP não
-   destrutivo para o kick, espelhando `create_bass_line_from_ableton_clip`
-   (atrás do gate do Live). (b) Snare/clap na contramão métrica (backbeat) e
-   hi-hat numa subdivisão da grade, condicionados ao compasso e à densidade de
-   onsets. (c) Modos de colocação do kick (downbeat-only, four-on-the-floor)
-   como parâmetro, já que a base por onset está pronta.
+3. **Percussão ciente de papel — próximos passos.** (a) [feito no Ciclo 16]
+   Fluxo MCP não destrutivo para o kick, espelhando
+   `create_bass_line_from_ableton_clip` (atrás do gate do Live). (b) Snare/clap
+   na contramão métrica (backbeat) e hi-hat numa subdivisão da grade,
+   condicionados ao compasso e à densidade de onsets. (c) Modos de colocação do
+   kick (downbeat-only, four-on-the-floor) como parâmetro, já que a base por
+   onset está pronta.

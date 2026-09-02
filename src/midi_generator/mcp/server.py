@@ -11,6 +11,7 @@ from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_contextual_plan, generate_plan
 from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
 from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
+from midi_generator.generation.drums import DEFAULT_KICK_VELOCITY
 from midi_generator.integration import (
     ClipProfilePayload,
     IntegrationPayload,
@@ -23,17 +24,19 @@ from midi_generator.mcp.ableton_transform import (
     BassLineClipResult,
     ChordBedClipResult,
     ContextualVariationResult,
+    KickClipResult,
     TransformedClipResult,
     create_bass_line_midi_clip_copy,
     create_chord_bed_midi_clip_copy,
     create_contextual_midi_clip_copy,
+    create_kick_midi_clip_copy,
     transform_midi_clip_copy,
 )
 
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.7.0",
+    version="1.8.0",
 )
 
 
@@ -263,6 +266,44 @@ def create_chord_bed_from_ableton_clip(
             sustain=sustain,
             octave=octave,
             chord_size=chord_size,
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def create_kick_from_ableton_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    velocity: int = DEFAULT_KICK_VELOCITY,
+) -> KickClipResult:
+    """Generate a kick pattern for a source clip into a protected copy.
+
+    Reads the source MIDI clip, builds a length-matched request and delegates
+    every musical decision to ``generate_kick_plan`` — one kick on each distinct
+    sounding onset of the reference. The source clip is never overwritten: the
+    kicks land only in the empty ``target`` slot after a fingerprint-protected
+    duplication. A kick is unpitched, so ``root_note`` and ``scale`` are carried
+    only for provenance continuity and are not inferred from the clip.
+    """
+    try:
+        return create_kick_midi_clip_copy(
+            AbletonClient(),
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            bpm,
+            root_note,
+            scale,
+            seed,
+            velocity=velocity,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

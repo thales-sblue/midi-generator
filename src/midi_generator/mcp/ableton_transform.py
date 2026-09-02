@@ -15,9 +15,11 @@ from midi_generator.generation import (
     generate_bass_line_plan,
     generate_chord_bed_plan,
     generate_contextual_plan,
+    generate_kick_plan,
 )
 from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
 from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
+from midi_generator.generation.drums import DEFAULT_KICK_VELOCITY
 from midi_generator.generation.melody import BEATS_PER_BAR
 from midi_generator.integration import (
     ableton_snapshot_to_clip,
@@ -132,6 +134,28 @@ class ChordBedClipResult(TypedDict):
     voicing: str
     note_grouping: str
     octave_offset_semitones: int
+
+
+class KickClipResult(TypedDict):
+    generated: bool
+    role: str
+    source_track_index: int
+    source_scene_index: int
+    target_track_index: int
+    target_scene_index: int
+    clip_length_beats: float
+    note_count: int
+    source_clip_fingerprint: str
+    target_clip_fingerprint: str
+    bpm: int
+    root_note: str
+    scale: str
+    seed: int
+    bars: int
+    velocity: int
+    onset_count: int
+    kick_pitch: int
+    reference_length_ticks: int
 
 
 @dataclass(frozen=True)
@@ -395,6 +419,67 @@ def create_chord_bed_midi_clip_copy(
         voicing=metadata["voicing"],
         note_grouping=metadata["note_grouping"],
         octave_offset_semitones=metadata["octave_offset_semitones"],
+    )
+
+
+def create_kick_midi_clip_copy(
+    client: AbletonClient,
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    *,
+    velocity: int = DEFAULT_KICK_VELOCITY,
+) -> KickClipResult:
+    """Generate a kick pattern for the source clip into a protected copy.
+
+    The musical work is :func:`generate_kick_plan` — one kick on every distinct
+    sounding onset of the reference. This function only reads the source, builds
+    the length-matched request, runs the shared non-destructive pipeline and
+    echoes the plan metadata back. A kick is unpitched, so ``root_note`` and
+    ``scale`` are carried only for provenance continuity and are not inferred.
+    """
+    outcome = _generate_into_protected_copy(
+        client,
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        lambda request, source_clip: generate_kick_plan(
+            request,
+            source_clip,
+            velocity=velocity,
+        ),
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+    )
+    metadata = outcome.plan.metadata
+    return KickClipResult(
+        generated=True,
+        role="kick",
+        source_track_index=source_track_index,
+        source_scene_index=source_scene_index,
+        target_track_index=target_track_index,
+        target_scene_index=target_scene_index,
+        clip_length_beats=outcome.replacement["clip_length_beats"],
+        note_count=outcome.replacement["note_count"],
+        source_clip_fingerprint=outcome.source_fingerprint,
+        target_clip_fingerprint=outcome.replacement["clip_fingerprint"],
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+        bars=outcome.bars,
+        velocity=velocity,
+        onset_count=metadata["onset_count"],
+        kick_pitch=metadata["kick_pitch"],
+        reference_length_ticks=metadata["reference_length_ticks"],
     )
 
 

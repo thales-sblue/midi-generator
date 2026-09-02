@@ -244,9 +244,11 @@ cada início distinto de nota audível do clip de referência vira um único kic
 na borda do clip. O plano cobre exatamente o clip de referência, então
 `request.bars` e `request.time_signature` têm de descrever esse comprimento. A
 `velocity` é fixa (padrão 100). É determinístico por construção e não sorteia
-nada; `request.seed` só viaja para o relatório e os metadados. Ainda não está
-ligado à CLI ou ao MCP — o fluxo Ableton não destrutivo é incremento próprio,
-atrás da fronteira de validação no Live, como foram o baixo e o leito de acordes.
+nada; `request.seed` só viaja para o relatório e os metadados. Não está ligado à
+CLI; o fluxo Ableton não destrutivo é exposto pela tool MCP
+`create_kick_from_ableton_clip` (ver "Geração ciente de papel a partir de um clip
+de referência"), ainda atrás da fronteira de validação no Live, como o baixo e o
+leito de acordes.
 
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
@@ -525,8 +527,9 @@ conferidos no piano roll do Live.
 
 ### Geração ciente de papel a partir de um clip de referência
 
-`create_bass_line_from_ableton_clip` e `create_chord_bed_from_ableton_clip`
-levam os geradores `generate_bass_line_plan` e `generate_chord_bed_plan` ao mesmo
+`create_bass_line_from_ableton_clip`, `create_chord_bed_from_ableton_clip` e
+`create_kick_from_ableton_clip` levam os geradores `generate_bass_line_plan`,
+`generate_chord_bed_plan` e `generate_kick_plan` ao mesmo
 fluxo não destrutivo: o clip de referência é lido, o comprimento define o número
 de compassos (ainda só 4/4 inteiro), a geração é simulada no domínio e só então o
 source é duplicado com proteção de fingerprint; as notas geradas substituem
@@ -565,8 +568,32 @@ gerador: `segment_beats` (default 1), `velocity` (default 96), `sustain`
 metadados do plano (`bars`, `note_grouping`, `octave_offset_semitones`,
 `chord_count`, `voicing`).
 
-Status da integração Live para `create_bass_line_from_ableton_clip` e
-`create_chord_bed_from_ableton_clip`: **PENDENTE DE VALIDAÇÃO MANUAL**. Domínio,
+`create_kick_from_ableton_clip` aceita apenas
+`source_*`/`target_*`/`bpm`/`root_note`/`scale`/`seed` e `velocity` (default
+100). O kick é uma voz sem altura e `generate_kick_plan` ignora a tonalidade
+musicalmente; `root_note` e `scale` seguem no request só para preservar o
+contrato e a continuidade de proveniência — a tonalidade não é inferida. A
+resposta ecoa `bars` e `velocity` e os metadados do plano diretamente
+(`onset_count`, `kick_pitch`, `reference_length_ticks`), sem recalculá-los no
+MCP.
+
+```json
+{
+  "source_track_index": 0,
+  "source_scene_index": 0,
+  "target_track_index": 0,
+  "target_scene_index": 1,
+  "bpm": 120,
+  "root_note": "C",
+  "scale": "minor",
+  "seed": 42,
+  "velocity": 100
+}
+```
+
+Status da integração Live para `create_bass_line_from_ableton_clip`,
+`create_chord_bed_from_ableton_clip` e `create_kick_from_ableton_clip`:
+**PENDENTE DE VALIDAÇÃO MANUAL**. Domínio,
 determinismo, preflight, proteção do source, encaminhamento de parâmetros e
 orquestração MCP são cobertos automaticamente; a criação e o conteúdo final ainda
 precisam ser conferidos no piano roll do Live.
