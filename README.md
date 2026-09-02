@@ -189,7 +189,11 @@ baixo monofônica: uma nota por janela soante, com a altura fixada na escala
 escolhida pelo chamador (`nearest_scale_pitch`, empate para baixo), e as janelas
 mudas viram pausa. Uma nota sustentada no source alimenta todas as janelas que
 ela cruza, e a última janela parcial é encurtada até a borda do clip. A `velocity`
-é fixa (padrão 96). O gerador é determinístico por construção e não sorteia nada;
+é fixa (padrão 96). Com `sustain=True`, janelas consecutivas que fixam na mesma
+altura da escala são amarradas numa única nota presa — uma janela muda sempre
+corta a nota —, de modo que o ritmo harmônico da saída segue a referência em vez
+do tamanho da janela; o padrão `sustain=False` mantém o pulso nota-por-janela.
+O gerador é determinístico por construção e não sorteia nada;
 a `seed` da requisição só viaja para o relatório e os metadados, como
 continuidade de proveniência. O plano gerado cobre exatamente o clip de
 referência, portanto `bars` e `time_signature` da requisição precisam descrever

@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 01/09/2026 — Ciclo 9 (gerador de baixo diatônico que segue
-a linha de fundamentais de um clip de referência).
+Última atualização: 01/09/2026 — Ciclo 10 (modo `sustain` do gerador de baixo:
+notas presas quando a fundamental fixada na escala não muda).
 
 ## Escopo do v1
 
@@ -30,6 +30,11 @@ clips apenas.
   `seed` só viaja para report/metadados. O plano cobre exatamente o clip de
   referência, então `request.bars`/`time_signature` têm de descrever esse mesmo
   comprimento. É a primeira geração ciente de papel, fundada no Ciclo 7.
+  `sustain` (Ciclo 10): com `False` (default) cada janela soante vira uma nota
+  (pulso na grade); com `True`, janelas consecutivas que fixam na *mesma* altura
+  da escala viram uma nota presa (uma janela muda sempre corta a nota), então o
+  ritmo harmônico da saída segue a referência e não o tamanho da janela.
+  `metadata["note_grouping"]` = `per_window` | `sustained`.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (108 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -75,7 +80,7 @@ clips apenas.
   imprime "bridge unavailable" sem Live). `tests/test_ableton_verification.py`
   (8 testes) exercita o harness contra o `BridgeDispatcher` real sobre um
   contexto Live em memória. (Ciclo 6).
-- Suíte: 341 testes verdes.
+- Suíte: 346 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -214,9 +219,24 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   inválido, serialização v1). Payload v1 intacto. Não integrado ao CLI/MCP —
   wiring e um fluxo Ableton não destrutivo são incremento próprio (fronteira de
   validação no Live).
+- [x] **Ciclo 10 — Modo `sustain` do gerador de baixo.**
+  `generate_bass_line_plan(..., sustain=False)`. Quando `True`, janelas
+  consecutivas cuja fundamental fixa na mesma altura da escala são amarradas
+  numa única nota presa; janela muda corta a nota. `metadata["note_grouping"]`
+  passa a `per_window` | `sustained`; `report.note_count` conta as notas
+  emitidas (pós-merge), `pause_count` continua contando janelas mudas.
+  Determinístico, sem RNG, isolado — nenhuma outra camada muda.
+  `tests/test_bass_line_generation.py` +5 casos (default é pulso, merge de
+  alturas iguais, merge de fundamentais distintas que fixam na mesma altura,
+  janela muda não é atravessada, `sustain` não-booleano). Payload v1 intacto.
 1. **Escalas não-heptatônicas** (pentatônicas, blues) — adiado do Ciclo 2 por
-   mudarem a premissa "7 notas"; avaliar impacto em `transpose_diatonic` /
-   `harmonize_diatonic` antes.
+   mudarem a premissa "7 notas". Impacto avaliado no Ciclo 10: `transpose_diatonic`
+   e `harmonize_diatonic` já indexam graus de `scale_pitches`, funcionam com
+   qualquer cardinalidade; `nearest_scale_pitch` idem. O ponto sensível é
+   `rank_scale_candidates`: uma escala de 5 notas tende a cobrir 100% de clips
+   curtos e dominaria o ranking. Antes de admitir pentatônicas é preciso decidir
+   a correção de cobertura (penalizar por tamanho, ranquear por cardinalidade,
+   ou excluir não-heptatônicas do ranking).
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.

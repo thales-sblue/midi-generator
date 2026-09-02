@@ -1,5 +1,7 @@
 """Deterministic bass line that follows a reference clip's harmonic foundation."""
 
+from dataclasses import replace
+
 from midi_generator.analysis import bass_line_pitches
 from midi_generator.domain import (
     CompositionPlan,
@@ -24,6 +26,7 @@ def generate_bass_line_plan(
     *,
     segment_beats: int = 1,
     velocity: int = DEFAULT_BASS_VELOCITY,
+    sustain: bool = False,
 ) -> CompositionPlan:
     """Turn a reference clip's bass line into a diatonic monophonic bass plan.
 
@@ -33,6 +36,13 @@ def generate_bass_line_plan(
     ``request``'s scale, ties downward; silent windows stay silent. The plan
     spans exactly the reference clip, so ``request.bars`` and
     ``request.time_signature`` must describe that same length.
+
+    With ``sustain=False`` (default) every sounding window yields its own note,
+    a repeated-note pulse that tracks the metric grid. With ``sustain=True``
+    consecutive windows that snap to the *same* scale pitch are tied into a
+    single held note, so a static foundation reads as one sustained bass note
+    and the harmonic rhythm of the output follows the reference rather than the
+    window size. A silent window always ends a held note.
 
     The generator is fully deterministic and draws no randomness; ``request.seed``
     is carried through to the report and metadata for provenance continuity only.
@@ -51,6 +61,8 @@ def generate_bass_line_plan(
         or not 1 <= velocity <= 127
     ):
         raise ValueError("velocity must be an integer between 1 and 127.")
+    if not isinstance(sustain, bool):
+        raise ValueError("sustain must be a boolean.")
     reference.validate()
 
     total_ticks = request.bars * request.time_signature.bar_ticks(TICKS_PER_BEAT)
@@ -71,14 +83,21 @@ def generate_bass_line_plan(
     for index, pitch in enumerate(foundation):
         if pitch is None:
             continue
+        snapped = nearest_scale_pitch(pitch, pitch_classes)
         start = index * segment_ticks
         end = min(start + segment_ticks, total_ticks)
+        if (
+            sustain
+            and notes
+            and notes[-1].pitch == snapped
+            and notes[-1].start + notes[-1].duration == start
+        ):
+            held = notes[-1]
+            notes[-1] = replace(held, duration=end - held.start)
+            continue
         notes.append(
             NoteEvent(
-                pitch=nearest_scale_pitch(pitch, pitch_classes),
-                start=start,
-                duration=end - start,
-                velocity=velocity,
+                pitch=snapped, start=start, duration=end - start, velocity=velocity
             )
         )
     note_events = tuple(notes)
@@ -108,6 +127,7 @@ def generate_bass_line_plan(
             "silent_segment_count": len(foundation) - sounding_segments,
             "foundation_source": "analysis.bass_line_pitches",
             "pitch_mapping": "nearest_scale_pitch_ties_down",
+            "note_grouping": "sustained" if sustain else "per_window",
             "velocity": velocity,
         },
     )

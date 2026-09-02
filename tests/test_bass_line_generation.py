@@ -166,6 +166,81 @@ def test_invalid_segment_beats_is_rejected():
         )
 
 
+def test_default_note_grouping_is_a_per_window_pulse():
+    plan = generate_bass_line_plan(
+        MelodyRequest(120, "C", "major", 1, 5), reference_clip()
+    )
+    assert plan.metadata["note_grouping"] == "per_window"
+
+
+def test_sustain_ties_consecutive_equal_snapped_pitches():
+    reference = EditableMidiClip(
+        length_ticks=1920,
+        notes=(
+            NoteEvent(36, 0, 480, 70),
+            NoteEvent(36, 480, 480, 70),
+            NoteEvent(43, 960, 480, 90),
+        ),
+    )
+    request = MelodyRequest(120, "C", "major", 1, 5)
+
+    pulse = generate_bass_line_plan(request, reference)
+    held = generate_bass_line_plan(request, reference, sustain=True)
+
+    assert [(n.pitch, n.start, n.duration) for n in pulse.notes] == [
+        (36, 0, 480),
+        (36, 480, 480),
+        (43, 960, 480),
+    ]
+    assert [(n.pitch, n.start, n.duration) for n in held.notes] == [
+        (36, 0, 960),
+        (43, 960, 480),
+    ]
+    assert held.report.note_count == 2
+    assert held.report.pause_count == 1
+    assert held.metadata["note_grouping"] == "sustained"
+    assert held == generate_bass_line_plan(request, reference, sustain=True)
+
+
+def test_sustain_does_not_bridge_a_silent_window():
+    reference = EditableMidiClip(
+        length_ticks=1920,
+        notes=(NoteEvent(36, 0, 480, 70), NoteEvent(36, 960, 480, 70)),
+    )
+    request = MelodyRequest(120, "C", "major", 1, 5)
+
+    held = generate_bass_line_plan(request, reference, sustain=True)
+
+    assert [(n.pitch, n.start, n.duration) for n in held.notes] == [
+        (36, 0, 480),
+        (36, 960, 480),
+    ]
+    assert held.report.note_count == 2
+    assert held.report.pause_count == 2
+
+
+def test_sustain_merges_distinct_foundations_that_snap_to_one_pitch():
+    reference = EditableMidiClip(
+        length_ticks=960,
+        notes=(NoteEvent(40, 0, 480, 70), NoteEvent(39, 480, 480, 70)),
+    )
+    request = MelodyRequest(
+        120, "C", "minor", 1, 5, time_signature=TimeSignature(2, 4)
+    )
+
+    held = generate_bass_line_plan(request, reference, sustain=True)
+
+    # E2 (pc 4) snaps down to Eb2 (39); Eb2 is already in C minor. One held note.
+    assert [(n.pitch, n.start, n.duration) for n in held.notes] == [(39, 0, 960)]
+
+
+def test_sustain_must_be_boolean():
+    with pytest.raises(ValueError, match="sustain must be a boolean"):
+        generate_bass_line_plan(
+            MelodyRequest(120, "C", "major", 1, 5), reference_clip(), sustain=1
+        )
+
+
 def test_bass_line_plan_serialises_as_payload_v1():
     plan = generate_bass_line_plan(
         MelodyRequest(120, "C", "major", 1, 42), reference_clip()
