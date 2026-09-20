@@ -19,7 +19,10 @@ from midi_generator.generation import (
 )
 from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
 from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
-from midi_generator.generation.drums import DEFAULT_KICK_VELOCITY
+from midi_generator.generation.drums import (
+    DEFAULT_KICK_PLACEMENT,
+    DEFAULT_KICK_VELOCITY,
+)
 from midi_generator.generation.melody import BEATS_PER_BAR
 from midi_generator.integration import (
     ableton_snapshot_to_clip,
@@ -153,7 +156,9 @@ class KickClipResult(TypedDict):
     seed: int
     bars: int
     velocity: int
+    placement: str
     onset_count: int
+    kick_count: int
     kick_pitch: int
     reference_length_ticks: int
 
@@ -434,14 +439,18 @@ def create_kick_midi_clip_copy(
     seed: int,
     *,
     velocity: int = DEFAULT_KICK_VELOCITY,
+    placement: str = DEFAULT_KICK_PLACEMENT,
 ) -> KickClipResult:
     """Generate a kick pattern for the source clip into a protected copy.
 
-    The musical work is :func:`generate_kick_plan` — one kick on every distinct
-    sounding onset of the reference. This function only reads the source, builds
-    the length-matched request, runs the shared non-destructive pipeline and
-    echoes the plan metadata back. A kick is unpitched, so ``root_note`` and
-    ``scale`` are carried only for provenance continuity and are not inferred.
+    The musical work is :func:`generate_kick_plan` — by default one kick on
+    every distinct sounding onset of the reference, or a fixed grid when
+    ``placement`` is ``"downbeat_only"`` or ``"four_on_floor"``. This function
+    only reads the source, builds the length-matched request, runs the shared
+    non-destructive pipeline and echoes the plan metadata back; ``placement``
+    is forwarded verbatim and validated by the generator. A kick is unpitched,
+    so ``root_note`` and ``scale`` are carried only for provenance continuity
+    and are not inferred.
     """
     outcome = _generate_into_protected_copy(
         client,
@@ -453,6 +462,7 @@ def create_kick_midi_clip_copy(
             request,
             source_clip,
             velocity=velocity,
+            placement=placement,
         ),
         bpm=bpm,
         root_note=root_note,
@@ -477,7 +487,9 @@ def create_kick_midi_clip_copy(
         seed=seed,
         bars=outcome.bars,
         velocity=velocity,
+        placement=metadata["placement"],
         onset_count=metadata["onset_count"],
+        kick_count=metadata["kick_count"],
         kick_pitch=metadata["kick_pitch"],
         reference_length_ticks=metadata["reference_length_ticks"],
     )

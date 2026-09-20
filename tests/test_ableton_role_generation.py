@@ -102,6 +102,22 @@ class RecordingClient:
         }
 
 
+def offbeat_source(fingerprint="source"):
+    """A one-bar 4/4 clip whose two sounding onsets avoid every downbeat."""
+    snapshot = bass_source(fingerprint)
+    snapshot["notes"] = [
+        {
+            "pitch": 48,
+            "start_time": start,
+            "duration": 0.5,
+            "velocity": 100,
+            "mute": False,
+        }
+        for start in (0.5, 2.5)
+    ]
+    return snapshot
+
+
 def replaced_notes(client):
     return client.calls[-1][4]
 
@@ -431,7 +447,9 @@ def test_kick_generates_and_replaces_only_protected_copy():
     assert result["scale"] == "major"
     assert result["seed"] == 7
     assert result["velocity"] == 100
+    assert result["placement"] == "per_onset"
     assert result["onset_count"] == 4
+    assert result["kick_count"] == 4
     assert result["kick_pitch"] == KICK_PITCH
     assert result["reference_length_ticks"] == 1920
 
@@ -530,6 +548,75 @@ def test_kick_rejects_fully_muted_source_before_duplicate():
 
     with pytest.raises(ValueError, match="at least one sounding note"):
         create_kick_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert client.calls == [("get", 0, 0)]
+
+
+def test_kick_default_placement_matches_explicit_per_onset():
+    default = RecordingClient(source=offbeat_source())
+    explicit = RecordingClient(source=offbeat_source())
+
+    result = create_kick_midi_clip_copy(default, 0, 0, 0, 1, 120, "C", "major", 7)
+    create_kick_midi_clip_copy(
+        explicit, 0, 0, 0, 1, 120, "C", "major", 7, placement="per_onset"
+    )
+
+    assert replaced_notes(default) == replaced_notes(explicit)
+    assert result["placement"] == "per_onset"
+
+
+def test_kick_forwards_downbeat_only_placement():
+    client = RecordingClient(source=offbeat_source())
+
+    result = create_kick_midi_clip_copy(
+        client, 0, 0, 0, 1, 120, "C", "major", 7, placement="downbeat_only"
+    )
+
+    assert [note["start_time"] for note in replaced_notes(client)] == [0.0]
+    assert client.calls[-1][1:4] == (0, 1, "copy")
+    assert result["placement"] == "downbeat_only"
+    assert result["kick_count"] == 1
+    # The reference's own onsets are still reported, but they are not followed.
+    assert result["onset_count"] == 2
+
+
+def test_kick_forwards_four_on_floor_placement():
+    client = RecordingClient(source=offbeat_source())
+
+    result = create_kick_midi_clip_copy(
+        client, 0, 0, 0, 1, 120, "C", "major", 7, placement="four_on_floor"
+    )
+
+    assert [note["start_time"] for note in replaced_notes(client)] == [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+    ]
+    assert result["placement"] == "four_on_floor"
+    assert result["kick_count"] == 4
+    assert result["onset_count"] == 2
+
+
+def test_kick_grid_placement_accepts_fully_muted_source():
+    client = RecordingClient(source=muted_source())
+
+    result = create_kick_midi_clip_copy(
+        client, 0, 0, 0, 1, 120, "C", "major", 7, placement="four_on_floor"
+    )
+
+    assert len(replaced_notes(client)) == 4
+    assert result["onset_count"] == 0
+    assert result["kick_count"] == 4
+
+
+def test_kick_rejects_unknown_placement_before_duplicate():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="placement must be one of"):
+        create_kick_midi_clip_copy(
+            client, 0, 0, 0, 1, 120, "C", "major", 7, placement="backbeat"
+        )
 
     assert client.calls == [("get", 0, 0)]
 

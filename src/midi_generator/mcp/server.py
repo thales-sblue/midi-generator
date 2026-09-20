@@ -11,7 +11,10 @@ from midi_generator.domain import MelodyRequest
 from midi_generator.generation import generate_contextual_plan, generate_plan
 from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
 from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
-from midi_generator.generation.drums import DEFAULT_KICK_VELOCITY
+from midi_generator.generation.drums import (
+    DEFAULT_KICK_PLACEMENT,
+    DEFAULT_KICK_VELOCITY,
+)
 from midi_generator.integration import (
     ClipProfilePayload,
     IntegrationPayload,
@@ -282,15 +285,19 @@ def create_kick_from_ableton_clip(
     scale: str,
     seed: int,
     velocity: int = DEFAULT_KICK_VELOCITY,
+    placement: str = DEFAULT_KICK_PLACEMENT,
 ) -> KickClipResult:
     """Generate a kick pattern for a source clip into a protected copy.
 
     Reads the source MIDI clip, builds a length-matched request and delegates
-    every musical decision to ``generate_kick_plan`` — one kick on each distinct
-    sounding onset of the reference. The source clip is never overwritten: the
-    kicks land only in the empty ``target`` slot after a fingerprint-protected
-    duplication. A kick is unpitched, so ``root_note`` and ``scale`` are carried
-    only for provenance continuity and are not inferred from the clip.
+    every musical decision to ``generate_kick_plan``. ``placement`` picks where
+    the kicks land: ``"per_onset"`` (default) doubles each distinct sounding
+    onset of the reference, ``"downbeat_only"`` plays the first beat of every
+    bar and ``"four_on_floor"`` every quarter note; the generator validates it.
+    The source clip is never overwritten: the kicks land only in the empty
+    ``target`` slot after a fingerprint-protected duplication. A kick is
+    unpitched, so ``root_note`` and ``scale`` are carried only for provenance
+    continuity and are not inferred from the clip.
     """
     try:
         return create_kick_midi_clip_copy(
@@ -304,6 +311,7 @@ def create_kick_from_ableton_clip(
             scale,
             seed,
             velocity=velocity,
+            placement=placement,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

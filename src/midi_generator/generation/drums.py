@@ -30,6 +30,7 @@ KICK_DURATION_TICKS = 240
 
 # How the kick lines up with the reference clip.
 PLACEMENT_MODES = ("per_onset", "downbeat_only", "four_on_floor")
+DEFAULT_KICK_PLACEMENT = "per_onset"
 
 
 def generate_kick_plan(
@@ -37,7 +38,7 @@ def generate_kick_plan(
     reference: EditableMidiClip,
     *,
     velocity: int = DEFAULT_KICK_VELOCITY,
-    placement: str = "per_onset",
+    placement: str = DEFAULT_KICK_PLACEMENT,
 ) -> CompositionPlan:
     """Place a kick (``KICK_PITCH``, General MIDI acoustic bass drum) against
     ``reference``.

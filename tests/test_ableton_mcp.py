@@ -1,6 +1,8 @@
 import asyncio
 
+import pytest
 from mcp import Client
+from mcp.server.mcpserver.exceptions import ToolError
 
 from midi_generator.domain import MelodyRequest
 from midi_generator.domain.music_theory import SCALE_INTERVALS
@@ -464,7 +466,9 @@ def test_mcp_client_creates_kick_only_in_target(monkeypatch):
     assert result.structured_content["role"] == "kick"
     assert result.structured_content["bars"] == 1
     assert result.structured_content["velocity"] == DEFAULT_KICK_VELOCITY
+    assert result.structured_content["placement"] == "per_onset"
     assert result.structured_content["onset_count"] == 1
+    assert result.structured_content["kick_count"] == 1
     assert result.structured_content["kick_pitch"] == KICK_PITCH
     assert result.structured_content["reference_length_ticks"] == 1920
     assert result.structured_content["source_clip_fingerprint"] == "source"
@@ -490,9 +494,40 @@ def test_create_kick_tool_forwards_velocity_and_delegates(monkeypatch):
     result = create_kick_from_ableton_clip(0, 0, 0, 1, 120, "C", "major", 42, velocity=70)
 
     assert captured["args"][1:] == (0, 0, 0, 1, 120, "C", "major", 42)
-    assert captured["kwargs"] == {"velocity": 70}
+    assert captured["kwargs"] == {"velocity": 70, "placement": "per_onset"}
     assert all(note["velocity"] == 70 for note in fake.replaced[3])
     assert result["velocity"] == 70
+
+
+def test_create_kick_tool_forwards_placement_to_generator(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    result = create_kick_from_ableton_clip(
+        0, 0, 0, 1, 120, "C", "major", 42, placement="four_on_floor"
+    )
+
+    # The grid replaces the reference's single offbeat onset.
+    assert [note["start_time"] for note in fake.replaced[3]] == [0.0, 1.0, 2.0, 3.0]
+    assert all(note["pitch"] == KICK_PITCH for note in fake.replaced[3])
+    assert fake.replaced[:3] == (0, 1, "copy")
+    assert result["placement"] == "four_on_floor"
+    assert result["kick_count"] == 4
+    assert result["onset_count"] == 1
+
+
+def test_create_kick_tool_converts_unknown_placement_to_tool_error(monkeypatch):
+    fake = TransformingFakeAbletonClient()
+    monkeypatch.setattr("midi_generator.mcp.server.AbletonClient", lambda: fake)
+
+    with pytest.raises(ToolError, match="placement must be one of"):
+        create_kick_from_ableton_clip(
+            0, 0, 0, 1, 120, "C", "major", 42, placement="backbeat"
+        )
+
+    # The generator rejects the mode during preflight, before any write.
+    assert not hasattr(fake, "duplicated")
+    assert not hasattr(fake, "replaced")
 
 
 def test_create_kick_tool_converts_value_error_to_tool_error(monkeypatch):

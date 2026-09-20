@@ -254,10 +254,10 @@ referência tinha, enquanto `metadata["kick_count"]` conta os kicks emitidos.
 
 A `velocity` é fixa (padrão 100). É determinístico por construção e não sorteia
 nada; `request.seed` só viaja para o relatório e os metadados. Não está ligado à
-CLI; o fluxo Ableton não destrutivo é exposto pela tool MCP
-`create_kick_from_ableton_clip` (ver "Geração ciente de papel a partir de um clip
-de referência"), ainda atrás da fronteira de validação no Live, como o baixo e o
-leito de acordes.
+CLI; o fluxo Ableton não destrutivo, incluindo `placement`, é exposto pela tool
+MCP `create_kick_from_ableton_clip` (ver "Geração ciente de papel a partir de um
+clip de referência"), ainda atrás da fronteira de validação no Live, como o
+baixo e o leito de acordes.
 
 O serializer de integração converte o mesmo plano no `Integration Payload v1`, um dicionário JSON-safe e determinístico para integrações externas. `schema_version = 1` identifica esse contrato; ele preserva a requisição, todas as notas, o relatório e os metadados da composição.
 
@@ -577,14 +577,18 @@ gerador: `segment_beats` (default 1), `velocity` (default 96), `sustain`
 metadados do plano (`bars`, `note_grouping`, `octave_offset_semitones`,
 `chord_count`, `voicing`).
 
-`create_kick_from_ableton_clip` aceita apenas
-`source_*`/`target_*`/`bpm`/`root_note`/`scale`/`seed` e `velocity` (default
-100). O kick é uma voz sem altura e `generate_kick_plan` ignora a tonalidade
-musicalmente; `root_note` e `scale` seguem no request só para preservar o
-contrato e a continuidade de proveniência — a tonalidade não é inferida. A
-resposta ecoa `bars` e `velocity` e os metadados do plano diretamente
-(`onset_count`, `kick_pitch`, `reference_length_ticks`), sem recalculá-los no
-MCP.
+`create_kick_from_ableton_clip` aceita
+`source_*`/`target_*`/`bpm`/`root_note`/`scale`/`seed`, `velocity` (default 100)
+e `placement` (`"per_onset"` default, `"downbeat_only"`, `"four_on_floor"`).
+Ambos são encaminhados verbatim a `generate_kick_plan`, que é quem valida
+`placement` — um modo desconhecido vira `ToolError` antes de qualquer
+duplicação, com o source intacto. O kick é uma voz sem altura e
+`generate_kick_plan` ignora a tonalidade musicalmente; `root_note` e `scale`
+seguem no request só para preservar o contrato e a continuidade de proveniência
+— a tonalidade não é inferida. A resposta ecoa `bars`, `velocity` e `placement`
+e os metadados do plano diretamente (`onset_count` — os onsets audíveis da
+referência —, `kick_count`, `kick_pitch`, `reference_length_ticks`), sem
+recalculá-los no MCP.
 
 ```json
 {
@@ -596,7 +600,8 @@ MCP.
   "root_note": "C",
   "scale": "minor",
   "seed": 42,
-  "velocity": 100
+  "velocity": 100,
+  "placement": "four_on_floor"
 }
 ```
 

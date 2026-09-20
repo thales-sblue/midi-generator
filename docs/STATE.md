@@ -4,9 +4,9 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 02/09/2026 — Ciclo 17 (modos de colocação do kick:
-`placement` = `per_onset` (default) | `downbeat_only` | `four_on_floor` em
-`generate_kick_plan`; core apenas, sem fio ao MCP ainda).
+Última atualização: 20/09/2026 — Ciclo 18 (`placement` do kick encaminhado por
+`create_kick_from_ableton_clip`; a resposta MCP passa a ecoar `placement` e
+`kick_count`).
 
 ## Escopo do v1
 
@@ -73,9 +73,9 @@ clips apenas.
   (referência toda muda é aceita nesses modos). `metadata["placement"]` novo;
   `metadata["onset_count"]` passa a contar os onsets audíveis da referência
   (igual ao número de kicks só no `per_onset`) e `metadata["kick_count"]` conta
-  os kicks emitidos. `placement` desconhecido → `ValueError`. Sem RNG, sem fio
-  ao MCP ainda — a tool `create_kick_from_ableton_clip` continua só no
-  `per_onset`.
+  os kicks emitidos. `placement` desconhecido → `ValueError`. Sem RNG; exposto ao
+  MCP no Ciclo 18 — `create_kick_from_ableton_clip` encaminha `placement`
+  verbatim ao gerador.
 - Análise: `analyze_clip` (perfil objetivo) + ranking de compatibilidade sobre
   todas as escalas × 12 centros (144 candidatos hoje) + `top_line_intervals`
   (contorno da voz superior) + `bass_line_pitches` (menor pitch soando por
@@ -149,8 +149,13 @@ clips apenas.
   ecoa `bars`/`velocity` e os metadados do plano (`onset_count`, `kick_pitch`,
   `reference_length_ticks`) sem recalcular. Payload v1 intacto; determinismo
   bit-exato preservado. Criação e conteúdo no Live **pendentes de validação
-  manual**.
-- Suíte: 443 testes verdes.
+  manual**. Ciclo 18: a tool passou a aceitar `placement`
+  (`per_onset` default | `downbeat_only` | `four_on_floor`), encaminhado
+  verbatim ao gerador — que continua sendo quem valida; modo desconhecido vira
+  `ToolError` antes de qualquer duplicação. `KickClipResult` ganhou `placement`
+  e `kick_count` (aditivo; `onset_count` continua contando os onsets audíveis
+  da referência).
+- Suíte: 450 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -170,7 +175,7 @@ clips apenas.
 - `create_contextual_variation_from_ableton_clip`
 - `create_bass_line_from_ableton_clip` (Ciclo 14)
 - `create_chord_bed_from_ableton_clip` (Ciclo 14)
-- `create_kick_from_ableton_clip` (Ciclo 16)
+- `create_kick_from_ableton_clip` (Ciclo 16; modos `placement` do Ciclo 18)
 
 Domínio, preflight e orquestração MCP já cobertos por testes; falta conferir a
 escrita no piano roll do Live contra o Ableton real. Ableton indisponível nesta
@@ -190,7 +195,7 @@ Cobertura automatizada conferida neste ciclo (não duplicar):
 | `create_contextual_variation_from_ableton_clip` | `test_contextual_generation.py` | `test_ableton_transform.py` (preflight, determinismo, 4/4, cópia protegida) | `test_ableton_mcp.py` | idem |
 | `create_bass_line_from_ableton_clip` | `test_bass_line_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `segment_beats`/`velocity`/`sustain`/`octave`, `CLIP_CHANGED`) | `test_ableton_mcp.py` | idem |
 | `create_chord_bed_from_ableton_clip` | `test_chord_bed_generation.py` | `test_ableton_role_generation.py` (idem + `chord_size`) | `test_ableton_mcp.py` | idem |
-| `create_kick_from_ableton_clip` | `test_kick_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `velocity`, tonalidade ignorada, `CLIP_CHANGED`, erro do replace) | `test_ableton_mcp.py` (registro, default de `velocity`, delegação, `ToolError`) | idem |
+| `create_kick_from_ableton_clip` | `test_kick_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `velocity`/`placement`, grades vs onsets, tonalidade ignorada, `CLIP_CHANGED`, erro do replace) | `test_ableton_mcp.py` (registro, defaults de `velocity`/`placement`, delegação, `placement` inválido, `ToolError`) | idem |
 
 Procedimento mínimo para fechar o gate (com Live 12 aberto + Control Surface
 `MidiGeneratorBridge` ativo):
@@ -250,6 +255,13 @@ mesmo fluxo `_generate_into_protected_copy`, também não coberto pelo harness
    `root_note`/`scale` e conferir que o conteúdo não muda.
 6. Repetir a chamada apontando `target` para um slot ocupado e confirmar a recusa
    (`TARGET_CLIP_SLOT_NOT_EMPTY`), com o source intacto.
+7. (Ciclo 18) Repetir em dois slots vazios com `placement="downbeat_only"` e
+   `placement="four_on_floor"` e conferir no piano roll um kick no primeiro
+   tempo de cada compasso e um kick por semínima, independentes dos onsets do
+   source; `kick_count` na resposta deve bater com os kicks vistos e
+   `onset_count` continuar descrevendo o source. Repetir com
+   `placement="backbeat"` e confirmar a recusa antes de qualquer duplicação
+   (nenhum clip novo criado, source intacto).
 
 ## Gate de escuta do SkyTNT (gate humano, não é ciclo)
 
@@ -477,6 +489,23 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   default == per_onset explícito, grade por compasso, grade por semínima, grades
   aceitam referência muda, determinismo das grades, `placement` inválido).
   Payload v1 intacto; determinismo bit-exato preservado. Suíte 443 verdes.
+- [x] **Ciclo 18 — `placement` do kick exposto ao MCP/Ableton.**
+  `create_kick_midi_clip_copy` e a tool `create_kick_from_ableton_clip` ganharam
+  o parâmetro `placement` (default `DEFAULT_KICK_PLACEMENT` = `"per_onset"`,
+  nova constante em `generation/drums.py`), encaminhado verbatim a
+  `generate_kick_plan` pelo mesmo `_generate_into_protected_copy` — nenhuma
+  validação nem algoritmo musical entrou no MCP: modo desconhecido levanta
+  `ValueError` no gerador, durante o preflight, e vira `ToolError` antes de
+  qualquer `duplicate`/`replace`, com o source intacto. `KickClipResult` ganhou
+  `placement` e `kick_count`, lidos dos metadados do plano sem recálculo
+  (crescimento aditivo do resultado da tool; o Payload v1 não é tocado).
+  `tests/test_ableton_role_generation.py` (+5 casos: default == `per_onset`
+  explícito, grade por compasso e por semínima sobre uma referência sincopada,
+  grade aceita referência toda muda, `placement` inválido antes do duplicate) e
+  `tests/test_ableton_mcp.py` (+2: encaminhamento pela tool, `placement`
+  inválido → `ToolError`). Suíte 450 verdes. Fronteira: conteúdo dos modos de
+  grade no Live **pendente de validação manual** (passo 7 do roteiro do gate do
+  kick). Falta ainda snare/clap/hi-hat e qualquer CLI de percussão.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
@@ -484,8 +513,8 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
    Fluxo MCP não destrutivo para o kick, espelhando
    `create_bass_line_from_ableton_clip` (atrás do gate do Live). (b) Snare/clap
    na contramão métrica (backbeat) e hi-hat numa subdivisão da grade,
-   condicionados ao compasso e à densidade de onsets. (c) [core feito no Ciclo
-   17] Modos de colocação do kick (`downbeat_only`, `four_on_floor`) como
-   parâmetro `placement` de `generate_kick_plan`; falta encaminhá-lo por
-   `create_kick_from_ableton_clip` (fluxo `_generate_into_protected_copy`),
-   atrás do gate do Live.
+   condicionados ao compasso e à densidade de onsets. (c) [feito nos Ciclos 17-18]
+   Modos de colocação do kick (`downbeat_only`, `four_on_floor`) como parâmetro
+   `placement` de `generate_kick_plan`, encaminhado por
+   `create_kick_from_ableton_clip` pelo fluxo `_generate_into_protected_copy`;
+   resta a conferência no Live.
