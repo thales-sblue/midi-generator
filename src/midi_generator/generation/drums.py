@@ -5,9 +5,10 @@ This module hosts the role-aware percussion generators. The first one,
 default it doubles every distinct onset of the reference, so the kick tracks
 whatever rhythm is already playing; two ``placement`` modes swap that for a
 fixed grid derived from the reference's length and metre (``downbeat_only``,
-``four_on_floor``). Unlike the bass line and chord bed, a drum voice is
-unpitched, so it does not go through ``generation.foundation`` and it ignores
-the request's key.
+``four_on_floor``). :func:`generate_snare_plan` places a snare on the
+backbeat, a metric grid derived the same way. Unlike the bass line and chord
+bed, a drum voice is unpitched, so neither goes through ``generation.foundation``
+and both ignore the request's key.
 """
 
 from midi_generator.domain import (
@@ -31,6 +32,11 @@ KICK_DURATION_TICKS = 240
 # How the kick lines up with the reference clip.
 PLACEMENT_MODES = ("per_onset", "downbeat_only", "four_on_floor")
 DEFAULT_KICK_PLACEMENT = "per_onset"
+
+# General MIDI acoustic snare.
+SNARE_PITCH = 38
+DEFAULT_SNARE_VELOCITY = 100
+SNARE_DURATION_TICKS = 240
 
 
 def generate_kick_plan(
@@ -137,6 +143,98 @@ def generate_kick_plan(
             "onset_count": len(onsets),
             "kick_count": len(notes),
             "kick_pitch": KICK_PITCH,
+            "velocity": velocity,
+        },
+    )
+    validate_plan(plan)
+    return plan
+
+
+def generate_snare_plan(
+    request: MelodyRequest,
+    reference: EditableMidiClip,
+    *,
+    velocity: int = DEFAULT_SNARE_VELOCITY,
+) -> CompositionPlan:
+    """Place a snare (``SNARE_PITCH``, General MIDI acoustic snare) on the
+    backbeat against ``reference``.
+
+    The backbeat is a fixed metric grid, not a read of the reference's onsets:
+    within every bar, one snare lands on every quarter note that is *not* the
+    first of a pair, i.e. the 2nd, 4th, 6th, ... beat (beats 2 and 4 in 4/4).
+    A bar with fewer than two beats never gets a snare, which the generator
+    rejects up front. The plan spans exactly the reference clip, so
+    ``request.bars`` and ``request.time_signature`` must describe that same
+    length, and each snare is ``SNARE_DURATION_TICKS`` long, shortened when
+    needed so it stops at the next snare or the clip end.
+
+    A snare is unpitched, so ``request.root_note`` and ``request.scale`` are
+    carried through for provenance continuity but play no musical role. The
+    generator is fully deterministic and draws no randomness; ``request.seed``
+    only reaches the report and metadata.
+    """
+    if (
+        not isinstance(velocity, int)
+        or isinstance(velocity, bool)
+        or not 1 <= velocity <= 127
+    ):
+        raise ValueError("velocity must be an integer between 1 and 127.")
+
+    request.validate()
+    reference.validate()
+
+    bar_ticks = request.time_signature.bar_ticks(TICKS_PER_BEAT)
+    total_ticks = request.bars * bar_ticks
+    if total_ticks != reference.length_ticks:
+        raise ValueError(
+            "Following a reference clip requires the request length to match "
+            f"the reference clip length ({reference.length_ticks} ticks), got "
+            f"{total_ticks}."
+        )
+    if bar_ticks < 2 * TICKS_PER_BEAT:
+        raise ValueError(
+            "Backbeat placement requires at least two beats per bar; "
+            f"{request.time_signature} has too few."
+        )
+
+    starts = [
+        bar_start + offset
+        for bar_start in range(0, total_ticks, bar_ticks)
+        for offset in range(TICKS_PER_BEAT, bar_ticks, 2 * TICKS_PER_BEAT)
+    ]
+
+    boundaries = [*starts[1:], total_ticks]
+    notes = tuple(
+        NoteEvent(
+            pitch=SNARE_PITCH,
+            start=start,
+            duration=min(SNARE_DURATION_TICKS, boundary - start),
+            velocity=velocity,
+        )
+        for start, boundary in zip(starts, boundaries)
+    )
+
+    report = GenerationReport(
+        note_count=len(notes),
+        pause_count=0,
+        duration_ticks=total_ticks,
+        scale=request.scale.lower(),
+        seed=request.seed,
+    )
+    plan = CompositionPlan(
+        request=request,
+        seed=request.seed,
+        notes=notes,
+        total_duration_ticks=total_ticks,
+        report=report,
+        metadata={
+            "time_signature": str(request.time_signature),
+            "ticks_per_beat": TICKS_PER_BEAT,
+            "generation_mode": "snare",
+            "placement": "backbeat",
+            "reference_length_ticks": reference.length_ticks,
+            "snare_count": len(notes),
+            "snare_pitch": SNARE_PITCH,
             "velocity": velocity,
         },
     )

@@ -4,9 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 20/09/2026 — Ciclo 18 (`placement` do kick encaminhado por
-`create_kick_from_ableton_clip`; a resposta MCP passa a ecoar `placement` e
-`kick_count`).
+Última atualização: 23/09/2026 — Ciclo 19 (`generate_snare_plan`: segunda
+percussão ciente de papel, snare na contramão métrica/backbeat).
 
 ## Escopo do v1
 
@@ -155,7 +154,22 @@ clips apenas.
   `ToolError` antes de qualquer duplicação. `KickClipResult` ganhou `placement`
   e `kick_count` (aditivo; `onset_count` continua contando os onsets audíveis
   da referência).
-- Suíte: 450 testes verdes.
+- `generate_snare_plan` (`generation/drums.py`, Ciclo 19) — segunda percussão
+  ciente de papel: um snare (`SNARE_PITCH = 38`, caixa do GM) na contramão
+  métrica (backbeat) de cada compasso — o 2º, 4º, 6º... tempo (semínima) a
+  partir do início do compasso, derivado só do comprimento/compasso do clip de
+  referência (**não** lê os onsets da referência, ao contrário do `per_onset`
+  do kick). Compasso com menos de dois tempos é recusado (`ValueError`) antes
+  de gerar. Duração `SNARE_DURATION_TICKS` (240) encurtada até o próximo
+  snare ou a borda do clip. Sem `foundation.py`, sem RNG, sem tonalidade
+  (`root_note`/`scale` só para proveniência). O plano cobre exatamente o clip
+  de referência (`request.bars`/`time_signature` iguais).
+  `metadata["generation_mode"] = "snare"`, `placement = "backbeat"`,
+  `snare_count`, `snare_pitch`. Flui pelo Payload v1 / exporter / evaluation /
+  provenance como qualquer `CompositionPlan`. Ainda não ligado ao MCP/CLI —
+  wiring Ableton não destrutivo é incremento próprio, atrás do gate do Live
+  (mesmo padrão do kick: Ciclo 15 domínio → Ciclo 16 MCP).
+- Suíte: 464 testes verdes.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -506,15 +520,37 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   inválido → `ToolError`). Suíte 450 verdes. Fronteira: conteúdo dos modos de
   grade no Live **pendente de validação manual** (passo 7 do roteiro do gate do
   kick). Falta ainda snare/clap/hi-hat e qualquer CLI de percussão.
+- [x] **Ciclo 19 — Snare no backbeat (segunda percussão ciente de papel).**
+  `generation/drums.py`: `generate_snare_plan(request, reference, *,
+  velocity=100)` — um snare (`SNARE_PITCH = 38`) no 2º, 4º, 6º... tempo de
+  cada compasso (backbeat), grade fixa derivada só do comprimento/compasso do
+  clip de referência; **não** lê os onsets da referência (diferente do
+  `per_onset` do kick — mais perto de `downbeat_only`/`four_on_floor`).
+  Compasso com menos de dois tempos é recusado (`ValueError`) antes de gerar
+  qualquer nota. Duração `SNARE_DURATION_TICKS` (240) encurtada até o próximo
+  snare ou a borda do clip. Sem `foundation.py`, sem RNG, sem tonalidade
+  (`root_note`/`scale` só para proveniência). `metadata["generation_mode"] =
+  "snare"`, `placement = "backbeat"`, `snare_count`, `snare_pitch`.
+  `tests/test_snare_generation.py` (14 casos: backbeat em 4/4, onsets da
+  referência ignorados, repetição em múltiplos compassos, só o 2º tempo em
+  3/4, clamp de duração, determinismo/seed, serialização v1, comprimento
+  incompatível, compasso com menos de dois tempos, faixa de velocity).
+  Payload v1 intacto; determinismo bit-exato preservado. Suíte 464 verdes.
+  Segue o mesmo padrão faseado do kick (Ciclo 15 domínio → Ciclo 16 MCP): não
+  ligado à CLI/MCP — o fluxo Ableton não destrutivo é incremento próprio,
+  atrás do gate do Live. Clap e hi-hat continuam de fora.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
 3. **Percussão ciente de papel — próximos passos.** (a) [feito no Ciclo 16]
    Fluxo MCP não destrutivo para o kick, espelhando
-   `create_bass_line_from_ableton_clip` (atrás do gate do Live). (b) Snare/clap
-   na contramão métrica (backbeat) e hi-hat numa subdivisão da grade,
-   condicionados ao compasso e à densidade de onsets. (c) [feito nos Ciclos 17-18]
-   Modos de colocação do kick (`downbeat_only`, `four_on_floor`) como parâmetro
-   `placement` de `generate_kick_plan`, encaminhado por
-   `create_kick_from_ableton_clip` pelo fluxo `_generate_into_protected_copy`;
-   resta a conferência no Live.
+   `create_bass_line_from_ableton_clip` (atrás do gate do Live). (b) [feito no
+   Ciclo 19] Snare na contramão métrica (backbeat), como grade fixa derivada
+   do compasso — clap (voz alternativa ao snare) e hi-hat numa subdivisão da
+   grade, condicionados à densidade de onsets, continuam de fora. (c) [feito
+   nos Ciclos 17-18] Modos de colocação do kick (`downbeat_only`,
+   `four_on_floor`) como parâmetro `placement` de `generate_kick_plan`,
+   encaminhado por `create_kick_from_ableton_clip` pelo fluxo
+   `_generate_into_protected_copy`; resta a conferência no Live. (d) Fluxo MCP
+   não destrutivo para `generate_snare_plan`, espelhando `create_kick_from_ableton_clip`
+   (atrás do gate do Live) — próximo incremento natural.
