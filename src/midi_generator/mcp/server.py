@@ -296,7 +296,8 @@ def create_kick_from_ableton_clip(
     every musical decision to ``generate_kick_plan``. ``placement`` picks where
     the kicks land: ``"per_onset"`` (default) doubles each distinct sounding
     onset of the reference, ``"downbeat_only"`` plays the first beat of every
-    bar and ``"four_on_floor"`` every quarter note; the generator validates it.
+    bar, ``"four_on_floor"`` every quarter note and ``"odd_beats"`` beats 1
+    and 3 of a 4/4 bar; the generator validates it.
     The source clip is never overwritten: the kicks land only in the empty
     ``target`` slot after a fingerprint-protected duplication. A kick is
     unpitched, so ``root_note`` and ``scale`` are carried only for provenance

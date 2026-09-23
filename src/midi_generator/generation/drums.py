@@ -5,8 +5,9 @@ This module hosts the role-aware percussion generators. The first one,
 default it doubles every distinct onset of the reference, so the kick tracks
 whatever rhythm is already playing; two ``placement`` modes swap that for a
 fixed grid derived from the reference's length and metre (``downbeat_only``,
-``four_on_floor``). :func:`generate_snare_plan` places a snare on the
-backbeat, a metric grid derived the same way. Unlike the bass line and chord
+``four_on_floor``, ``odd_beats``). :func:`generate_snare_plan` places a snare
+on the backbeat and :func:`generate_hihat_plan` a closed hi-hat on a steady
+subdivision of the beat, metric grids derived the same way. Unlike the bass line and chord
 bed, a drum voice is unpitched, so neither goes through ``generation.foundation``
 and both ignore the request's key.
 """
@@ -30,13 +31,21 @@ DEFAULT_KICK_VELOCITY = 100
 KICK_DURATION_TICKS = 240
 
 # How the kick lines up with the reference clip.
-PLACEMENT_MODES = ("per_onset", "downbeat_only", "four_on_floor")
+PLACEMENT_MODES = ("per_onset", "downbeat_only", "four_on_floor", "odd_beats")
 DEFAULT_KICK_PLACEMENT = "per_onset"
 
 # General MIDI acoustic snare.
 SNARE_PITCH = 38
 DEFAULT_SNARE_VELOCITY = 100
 SNARE_DURATION_TICKS = 240
+
+# General MIDI closed hi-hat.
+HIHAT_PITCH = 42
+DEFAULT_HIHAT_VELOCITY = 80
+# Hits per quarter-note beat: 1 = quarters, 2 = eighths, 4 = sixteenths.
+HIHAT_SUBDIVISIONS = (1, 2, 4)
+DEFAULT_HIHAT_SUBDIVISION = 2
+HIHAT_DURATION_TICKS = 120
 
 
 def generate_kick_plan(
@@ -62,6 +71,9 @@ def generate_kick_plan(
       reference's length and metre. The reference's own onsets are not read.
     - ``"four_on_floor"``: one kick on every quarter note. The reference's own
       onsets are not read.
+    - ``"odd_beats"``: one kick on the 1st, 3rd, 5th... beat of every bar
+      (beats 1 and 3 in 4/4), the complement of the snare's backbeat. The
+      reference's own onsets are not read.
 
     A kick is unpitched, so ``request.root_note`` and ``request.scale`` are
     carried through for provenance continuity but play no musical role. The
@@ -102,8 +114,14 @@ def generate_kick_plan(
         starts = onsets
     elif placement == "downbeat_only":
         starts = list(range(0, total_ticks, bar_ticks))
-    else:  # four_on_floor: one kick per quarter note
+    elif placement == "four_on_floor":
         starts = list(range(0, total_ticks, TICKS_PER_BEAT))
+    else:  # odd_beats: the 1st, 3rd, 5th... beat of every bar
+        starts = [
+            bar_start + offset
+            for bar_start in range(0, total_ticks, bar_ticks)
+            for offset in range(0, bar_ticks, 2 * TICKS_PER_BEAT)
+        ]
 
     boundaries = [*starts[1:], total_ticks]
     notes = tuple(
@@ -235,6 +253,96 @@ def generate_snare_plan(
             "reference_length_ticks": reference.length_ticks,
             "snare_count": len(notes),
             "snare_pitch": SNARE_PITCH,
+            "velocity": velocity,
+        },
+    )
+    validate_plan(plan)
+    return plan
+
+
+def generate_hihat_plan(
+    request: MelodyRequest,
+    reference: EditableMidiClip,
+    *,
+    subdivision: int = DEFAULT_HIHAT_SUBDIVISION,
+    velocity: int = DEFAULT_HIHAT_VELOCITY,
+) -> CompositionPlan:
+    """Play a closed hi-hat (``HIHAT_PITCH``, General MIDI) on a steady grid
+    against ``reference``.
+
+    ``subdivision`` hits land on every quarter-note beat, evenly spaced: ``1``
+    for quarters, ``2`` (default) for eighths, ``4`` for sixteenths. Like the
+    snare's backbeat, the grid comes only from the reference's length and
+    metre, never from its onsets, so a silent reference is accepted. The plan
+    spans exactly the reference clip, so ``request.bars`` and
+    ``request.time_signature`` must describe that same length. Each hit is
+    ``HIHAT_DURATION_TICKS`` long, shortened when needed so it stops at the
+    next hit or the clip end.
+
+    A hi-hat is unpitched, so ``request.root_note`` and ``request.scale`` are
+    carried through for provenance continuity but play no musical role. The
+    generator is fully deterministic and draws no randomness; ``request.seed``
+    only reaches the report and metadata.
+    """
+    if subdivision not in HIHAT_SUBDIVISIONS or isinstance(subdivision, bool):
+        raise ValueError(
+            "subdivision must be one of "
+            f"{', '.join(str(value) for value in HIHAT_SUBDIVISIONS)}; "
+            f"got {subdivision!r}."
+        )
+    if (
+        not isinstance(velocity, int)
+        or isinstance(velocity, bool)
+        or not 1 <= velocity <= 127
+    ):
+        raise ValueError("velocity must be an integer between 1 and 127.")
+
+    request.validate()
+    reference.validate()
+
+    bar_ticks = request.time_signature.bar_ticks(TICKS_PER_BEAT)
+    total_ticks = request.bars * bar_ticks
+    if total_ticks != reference.length_ticks:
+        raise ValueError(
+            "Following a reference clip requires the request length to match "
+            f"the reference clip length ({reference.length_ticks} ticks), got "
+            f"{total_ticks}."
+        )
+
+    step = TICKS_PER_BEAT // subdivision
+    starts = list(range(0, total_ticks, step))
+    boundaries = [*starts[1:], total_ticks]
+    notes = tuple(
+        NoteEvent(
+            pitch=HIHAT_PITCH,
+            start=start,
+            duration=min(HIHAT_DURATION_TICKS, boundary - start),
+            velocity=velocity,
+        )
+        for start, boundary in zip(starts, boundaries)
+    )
+
+    report = GenerationReport(
+        note_count=len(notes),
+        pause_count=0,
+        duration_ticks=total_ticks,
+        scale=request.scale.lower(),
+        seed=request.seed,
+    )
+    plan = CompositionPlan(
+        request=request,
+        seed=request.seed,
+        notes=notes,
+        total_duration_ticks=total_ticks,
+        report=report,
+        metadata={
+            "time_signature": str(request.time_signature),
+            "ticks_per_beat": TICKS_PER_BEAT,
+            "generation_mode": "hihat",
+            "subdivision": subdivision,
+            "reference_length_ticks": reference.length_ticks,
+            "hihat_count": len(notes),
+            "hihat_pitch": HIHAT_PITCH,
             "velocity": velocity,
         },
     )

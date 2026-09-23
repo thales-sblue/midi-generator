@@ -470,7 +470,8 @@ def create_kick_midi_clip_copy(
 
     The musical work is :func:`generate_kick_plan` — by default one kick on
     every distinct sounding onset of the reference, or a fixed grid when
-    ``placement`` is ``"downbeat_only"`` or ``"four_on_floor"``. This function
+    ``placement`` is ``"downbeat_only"``, ``"four_on_floor"`` or
+    ``"odd_beats"``. This function
     only reads the source, builds the length-matched request, runs the shared
     non-destructive pipeline and echoes the plan metadata back; ``placement``
     is forwarded verbatim and validated by the generator. A kick is unpitched,

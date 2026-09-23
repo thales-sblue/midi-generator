@@ -2,7 +2,7 @@
 
 import pytest
 
-from midi_generator.domain import MelodyRequest, NoteEvent
+from midi_generator.domain import MelodyRequest, NoteEvent, TimeSignature
 from midi_generator.generation import generate_kick_plan
 from midi_generator.generation.drums import KICK_DURATION_TICKS, KICK_PITCH
 from midi_generator.integration import (
@@ -159,6 +159,28 @@ def test_four_on_floor_places_one_kick_per_quarter_note():
     assert all(n.duration == KICK_DURATION_TICKS for n in plan.notes[:-1])
     assert plan.metadata["placement"] == "four_on_floor"
     assert plan.metadata["kick_count"] == 8
+
+
+def test_odd_beats_places_kicks_on_beats_one_and_three():
+    plan = generate_kick_plan(
+        request(bars=2), two_bar_reference(), placement="odd_beats"
+    )
+
+    assert [n.start for n in plan.notes] == [0, 960, 1920, 2880]
+    assert all(n.duration == KICK_DURATION_TICKS for n in plan.notes)
+    assert plan.metadata["placement"] == "odd_beats"
+    assert plan.metadata["onset_source"] == "odd_beats grid"
+    assert plan.metadata["kick_count"] == 4
+
+
+def test_odd_beats_restarts_on_every_bar_in_three_four():
+    three_four = MelodyRequest(120, "C", "major", 2, 42, TimeSignature(3, 4))
+    silent = EditableMidiClip(length_ticks=2880, notes=())
+
+    plan = generate_kick_plan(three_four, silent, placement="odd_beats")
+
+    # Beats 1 and 3 of each 3/4 bar; the next bar's downbeat follows beat 3.
+    assert [n.start for n in plan.notes] == [0, 960, 1440, 2400]
 
 
 def test_grid_placements_do_not_require_a_sounding_reference():
