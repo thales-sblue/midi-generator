@@ -24,6 +24,7 @@ from midi_generator.integration import (
     composition_to_payload,
     validate_payload_v1,
 )
+from midi_generator.mcp import audio_tools
 from midi_generator.mcp.ableton_transform import (
     BassLineClipResult,
     ChordBedClipResult,
@@ -42,7 +43,7 @@ from midi_generator.mcp.ableton_transform import (
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.9.0",
+    version="1.10.0",
 )
 
 
@@ -82,6 +83,61 @@ def generate_melody(
     try:
         return _generate_payload(bpm, root_note, scale, bars, seed)
     except ValueError as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def analyze_audio_file(
+    path: str,
+    beats_per_bar: int | None = None,
+    tempo_hint: float | None = None,
+) -> audio_tools.AudioAnalysisResult:
+    """Analyse a local recording: tempo, beat times, metre, key and chords per bar.
+
+    Every estimate carries a confidence; treat low values as guesses to confirm
+    with the user. ``beats_per_bar`` fixes the metre instead of choosing 4 vs 3.
+    ``tempo_hint`` (approximate BPM) fixes a tempo read at half or double speed.
+    """
+    try:
+        return audio_tools.analyze_audio_file(
+            path, beats_per_bar=beats_per_bar, tempo_hint=tempo_hint
+        )
+    except (FileNotFoundError, ValueError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def generate_accompaniment_from_audio(
+    path: str,
+    style: str = "basic",
+    seed: int = 0,
+    sustain_bass: bool = True,
+    follow_recording: bool = True,
+    beats_per_bar: int | None = None,
+    tempo_hint: float | None = None,
+) -> audio_tools.AudioAccompanimentResult:
+    """Analyse a recording and write a bass and a drum MIDI file that follow it.
+
+    The bass plays the root of every detected chord inside the detected key;
+    the drums (``style="basic"``) put the kick on beats 1 and 3, the snare on 2
+    and 4 and a closed hi-hat on eighths. Files go to
+    ``output/accompaniment/<name>.bass.mid`` / ``.drums.mid`` with the analysis
+    as ``.analysis.json``. With ``follow_recording`` (default) the MIDI carries
+    the recording's own beat timing and lead-in, so it plays in sync when
+    started together with the audio; otherwise it starts at bar 1 at the
+    rounded tempo. Nothing is written to Ableton.
+    """
+    try:
+        return audio_tools.create_accompaniment_files(
+            path,
+            style=style,
+            seed=seed,
+            sustain_bass=sustain_bass,
+            follow_recording=follow_recording,
+            beats_per_bar=beats_per_bar,
+            tempo_hint=tempo_hint,
+        )
+    except (FileNotFoundError, ValueError) as error:
         raise ToolError(str(error)) from error
 
 

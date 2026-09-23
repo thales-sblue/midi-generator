@@ -100,11 +100,30 @@ python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 -
 
 O projeto inclui uma ponte opcional para Ableton Live 12 Lite. O motor, a exportação MIDI e `generate_melody` continuam funcionando normalmente sem Ableton; somente as operações descritas na seção "Ableton Live" exigem que o Live esteja aberto e com o Remote Script ativo.
 
+## Análise de áudio e acompanhamento
+
+A camada `midi_generator.audio` analisa uma gravação simples de violão/guitarra
+(tempo, posição de cada beat, compasso, primeiro downbeat, tonalidade e acordes
+por compasso, todos com nível de confiança) e produz uma `MusicAnalysis`. A
+partir dela, os geradores já existentes criam um baixo que segue os acordes e
+uma bateria básica (kick 1 e 3, caixa 2 e 4, chimbal em colcheias), exportados
+com o mapa de tempo da gravação para ficarem alinhados ao áudio:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m midi_generator.audio analyze guitar.wav
+python -m midi_generator.audio accompany guitar.wav --output-dir output
+```
+
+Detalhes, escolhas técnicas, limitações e o roteiro de validação com gravação
+real: [`docs/AUDIO_ANALYSIS.md`](docs/AUDIO_ANALYSIS.md).
+
 ## Arquitetura
 
 A direção, a auditoria e as regras de admissão de dependências estão em:
 
 - [`docs/ARCHITECTURE_AUDIT.md`](docs/ARCHITECTURE_AUDIT.md);
+- [`docs/AUDIO_ANALYSIS.md`](docs/AUDIO_ANALYSIS.md);
 - [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md);
 - [`docs/POC_SKYTNT.md`](docs/POC_SKYTNT.md);
 - [`docs/POC_SKYTNT_RESULTS.md`](docs/POC_SKYTNT_RESULTS.md);

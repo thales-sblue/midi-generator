@@ -4,8 +4,9 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 23/09/2026 — Ciclo 20 (`create_snare_from_ableton_clip`:
-snare exposto ao MCP/Ableton pelo mesmo fluxo não destrutivo do kick).
+Última atualização: 23/09/2026 — Ciclo 21 (análise de áudio: gravação →
+`MusicAnalysis` → baixo + bateria pelos geradores existentes, MIDI alinhado à
+gravação; `docs/AUDIO_ANALYSIS.md`).
 
 ## Escopo do v1
 
@@ -189,6 +190,21 @@ clips apenas.
   Ableton e orquestração segura; teste de subprocesso real.
 - Bridge Ableton: Remote Script + socket JSON/TCP `127.0.0.1:20812`, fingerprint
   SHA-256, `CLIP_CHANGED`.
+- Análise de áudio (Ciclo 21, `docs/AUDIO_ANALYSIS.md`): `audio/` (librosa;
+  única camada com numpy) → `domain.MusicAnalysis` (puro; `BeatGrid` com
+  segundos↔beat↔compasso beat a beat, `KeyEstimate`, `ChordSegment`, `Measure`,
+  `MidiTempoMap`; schema próprio `music_analysis` v1) →
+  `generation/accompaniment.py` (clip de referência harmônica com as
+  fundamentais dos acordes → `generate_bass_line_plan`; kick `odd_beats` +
+  snare + hi-hat → um plano `drum_kit`; `DRUM_STYLES = {"basic"}`) →
+  `exporters.export_accompaniment` (mapa de tempo por beat + lead-in até o
+  primeiro downbeat). CLI `python -m midi_generator.audio analyze|accompany`;
+  tools MCP `analyze_audio_file` / `generate_accompaniment_from_audio` (só
+  arquivos em `output/accompaniment/`, nada no Live). `generate_hihat_plan`
+  (`HIHAT_PITCH = 42`, subdivisão 1/2/4 por beat) e kick `placement="odd_beats"`
+  novos em `drums.py`. `MidiExporter` passou a aceitar notas simultâneas
+  (saída byte a byte idêntica para planos monofônicos, conferido em 120
+  planos) e `tempo_map` opcional.
 - Suíte roda com `--basetemp=.pytest-tmp` nesta máquina.
 - Validado manualmente no Live 12.4.5: geração, edição, duplicação protegida e
   transpose, invert, retrograde, quantize, humanize, legato, staccato.
@@ -314,6 +330,17 @@ mesmo fluxo `_generate_into_protected_copy`, também não coberto pelo harness
 6. Repetir a chamada apontando `target` para um slot ocupado e confirmar a recusa
    (`TARGET_CLIP_SLOT_NOT_EMPTY`), com o source intacto.
 
+## Análise de áudio com gravação real (gate humano, não é ciclo)
+
+Ciclo 21 validado só com violão sintético (tempo ± 2 BPM, beats ± 30 ms,
+acordes, tonalidade, MIDI nos beats da gravação). **Não validado com gravação
+real nem ouvido no Live.** Roteiro em `docs/AUDIO_ANALYSIS.md` → "Validação":
+gravar 8–16 compassos de progressão simples, rodar
+`python -m midi_generator.audio accompany take.wav --output-dir output`,
+conferir o resumo contra o que foi tocado e ouvir os dois `.mid` junto com o
+WAV no Live. Conferir também se o Live respeita o mapa de tempo do `.mid`
+importado; se não, usar `--constant-tempo` com o áudio warpado.
+
 ## Gate de escuta do SkyTNT (gate humano, não é ciclo)
 
 POC isolada executada (`POC_SKYTNT_RESULTS.md`); passou em CUDA/CPU/offline.
@@ -330,7 +357,11 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   "estender a bridge própria" — nenhuma opção externa pesquisada tem garantias
   não-destrutivas/fingerprint/concorrência. Decidir só quando o v1 fechar.
 - Migração do `.venv` para um Python 3.12 fora do cache `codex-runtimes`.
-- Pins de dependências de runtime (`requirements.txt` usa faixas).
+- Pins de dependências de runtime (`requirements.txt` usa faixas). O scipy
+  está limitado a `<1.17` porque o 1.18.1 tem DLL bloqueada pelo Controle de
+  Aplicativo do Windows desta máquina.
+- Provenance v0 rotula os geradores de papel (e o acompanhamento de áudio)
+  como `heuristic` e não registra a `MusicAnalysis` de contexto.
 - Lacunas de CI (mypy/lint/Windows/cobertura; Remote Script e bridge TCP sem
   cobertura).
 
@@ -598,6 +629,28 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   `1.9.0`. Fronteira: criação e conteúdo no Live **pendentes de validação
   manual** (roteiro no gate acima). Nenhuma dependência nova; sem CLI de
   snare; sem clap/hi-hat.
+- [x] **Ciclo 21 — Análise de áudio → acompanhamento (baixo + bateria).**
+  Pedido explícito do usuário (fora do escopo do v1, que é MIDI; não altera o
+  percentual do v1). Dependência nova avaliada e registrada em
+  `DEPENDENCY_POLICY.md`: librosa 0.11 (ISC) + numpy/scipy/soundfile; madmom
+  (pesos NC), Essentia (AGPL, sem wheel Windows), autochord/crema/basic-pitch
+  (TensorFlow) rejeitados ou congelados. `domain/music_analysis.py`,
+  `audio/{loader,rhythm,harmony,analyzer,__main__}.py`,
+  `generation/accompaniment.py`, `exporters/accompaniment.py`,
+  `mcp/audio_tools.py`; `generate_hihat_plan` e `placement="odd_beats"` em
+  `drums.py`; exporter polifônico + `tempo_map`. Testes:
+  `test_music_analysis.py` (30), `test_accompaniment.py` (14),
+  `test_hihat_generation.py`, `test_audio_analysis.py` (61, violão
+  sintético), `test_audio_interfaces.py` (CLI + MCP), +2 em
+  `test_kick_generation.py`. Payload v1 intacto; bit-exatidão preservada
+  (geração a partir da análise sem RNG; análise é nível "ambiente fixado").
+  Suíte 611 verdes. Versão do MCP server: `1.10.0`. Fronteira: gravação real e
+  escuta no Live **pendentes** (gate acima). Próximos candidatos: estilos de
+  bateria (rock/grunge/punk) como entradas de `DRUM_STYLES` depois de
+  especificados e ouvidos; inserir o acompanhamento em clips do Live pelo
+  `create_midi_clip` já validado; `MIDI → MusicAnalysis` a partir de
+  `analyze_clip`/`bass_line_pitches`; compasso composto (6/8); proveniência
+  da análise.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
@@ -605,8 +658,9 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
    Fluxo MCP não destrutivo para o kick, espelhando
    `create_bass_line_from_ableton_clip` (atrás do gate do Live). (b) [feito no
    Ciclo 19] Snare na contramão métrica (backbeat), como grade fixa derivada
-   do compasso — clap (voz alternativa ao snare) e hi-hat numa subdivisão da
-   grade, condicionados à densidade de onsets, continuam de fora. (c) [feito
+   do compasso — clap (voz alternativa ao snare) continua de fora; hi-hat numa
+   subdivisão fixa da grade entrou no Ciclo 21 (`generate_hihat_plan`, ainda
+   sem tool Ableton própria nem condicionamento à densidade de onsets). (c) [feito
    nos Ciclos 17-18] Modos de colocação do kick (`downbeat_only`,
    `four_on_floor`) como parâmetro `placement` de `generate_kick_plan`,
    encaminhado por `create_kick_from_ableton_clip` pelo fluxo

@@ -22,6 +22,12 @@ Ableton Live. Nada abaixo tem precedência sobre `AGENTS.md`.
 - Use sempre o interpretador do `.venv`: `.venv\Scripts\python.exe`.
 - Pendência: migrar o `.venv` para um Python 3.12 instalado normalmente antes que
   o cache `codex-runtimes` pare de ser mantido ou seja removido.
+- O Controle de Aplicativo do Windows bloqueia a DLL `scipy.optimize._direct` do
+  scipy 1.18.1 ("Uma política de Controle de Aplicativo bloqueou este arquivo");
+  o scipy 1.16.x carrega. Por isso `requirements.txt` limita `scipy<1.17`. Não
+  contorne a política.
+- A primeira análise de áudio após instalar/atualizar o librosa compila funções
+  numba (~40 s); as seguintes usam o cache.
 
 ## Comandos
 
@@ -33,7 +39,7 @@ python -m venv .venv          # ou o python base indicado acima
 pip install -r requirements.txt
 ```
 
-Suíte de testes (443 testes; espelha o GitHub Actions):
+Suíte de testes (611 testes; espelha o GitHub Actions):
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -50,6 +56,14 @@ CLI do gerador heurístico:
 ```powershell
 $env:PYTHONPATH = "src"
 python -m midi_generator --bpm 124 --root A --scale minor --bars 8 --seed 2026 --output output/example.mid
+```
+
+Análise de áudio e acompanhamento (baixo + bateria alinhados à gravação):
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m midi_generator.audio analyze guitar.wav [--json] [--tempo-hint 70]
+python -m midi_generator.audio accompany guitar.wav --output-dir output
 ```
 
 Servidor MCP (stdio):
@@ -74,6 +88,9 @@ python -m midi_generator.ableton doctor
 | `src/midi_generator/domain/` | estruturas MIDI imutáveis, tabela de escalas (maior, menor, modos gregos, harmônica/melódica, pentatônicas e blues), requests, report — sem Mido/MCP/Live |
 | `src/midi_generator/generation/` | backend heurístico (`melody.py`), geração contextual (`contextual.py`) e geradores cientes de papel (`bass_line.py`, `chords.py` sobre a fundação compartilhada `foundation.py`; `drums.py` para percussão, sem fundação/tonalidade) |
 | `src/midi_generator/analysis/` | perfil objetivo de clip e ranking de compatibilidade (todas as escalas × 12 centros) |
+| `src/midi_generator/audio/` | "ouvido": gravação → `MusicAnalysis` (beats, compasso, downbeat, tonalidade, acordes). Única camada que importa librosa/numpy |
+| `src/midi_generator/domain/music_analysis.py` | `MusicAnalysis`/`BeatGrid`/`ChordSegment`/`KeyEstimate`/`Measure`, conversões segundos↔beat↔compasso e mapa de tempo — puro, sem numpy |
+| `src/midi_generator/generation/accompaniment.py` | `MusicAnalysis` → requisição + clip de referência harmônica → geradores de baixo/bateria existentes |
 | `src/midi_generator/evaluation/` | seeds derivadas, proxies objetivos de score e ranking de candidatos (harness da lacuna #2 / gate de escuta) |
 | `src/midi_generator/provenance/` | manifesto de proveniência v0 (backend+versão, seed, params, hash de contexto/output, timestamp) — schema próprio, ao lado do Payload v1 |
 | `src/midi_generator/transformations/` | transformações puras em ticks (transpose, invert, retrograde, quantize, legato, staccato, humanize, escala, diatônicas, velocity ramp) |
