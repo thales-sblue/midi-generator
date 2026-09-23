@@ -115,8 +115,10 @@ python -m midi_generator.audio analyze guitar.wav
 python -m midi_generator.audio accompany guitar.wav --output-dir output
 ```
 
-Detalhes, escolhas técnicas, limitações e o roteiro de validação com gravação
-real: [`docs/AUDIO_ANALYSIS.md`](docs/AUDIO_ANALYSIS.md).
+Pelo MCP, `insert_audio_accompaniment_into_ableton` cria o baixo e a bateria
+como dois clips novos em slots vazios da Session View (nunca altera clips
+existentes; só 4/4). Detalhes, escolhas técnicas, limitações e o roteiro de
+validação com gravação real: [`docs/AUDIO_ANALYSIS.md`](docs/AUDIO_ANALYSIS.md).
 
 ## Arquitetura
 

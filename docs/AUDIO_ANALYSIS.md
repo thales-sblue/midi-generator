@@ -19,7 +19,7 @@ MelodyRequest + clip de referência harmônica (EditableMidiClip)
 CompositionPlan (baixo, bateria)
    │  exporters/ (mapa de tempo da gravação)
    ▼
-.mid alinhado ao áudio  ──►  Ableton (hoje: arquivo; bridge: incremento futuro)
+.mid alinhado ao áudio  ──►  Ableton (arquivo, ou dois clips novos na Session View)
 ```
 
 Decisões:
@@ -66,7 +66,7 @@ negativos são anacruse.
 | Tempo | média do vão total da grade | a mediana de intervalos quantizados enviesava (117,5 em vez de 120) |
 | Compasso e downbeat | para cada hipótese (4 ou 3 tempos × fase): contraste de mudança harmônica + acento nos candidatos a tempo 1 | acordes costumam mudar e rasgueados costumam acentuar no tempo 1; sem modelo treinado |
 | Acordes | chroma CQT da parte harmônica (HPSS) → mediana por beat → similaridade com 24 templates de tríade + estado "sem acorde" → bônus pequeno à fundamental dominante no registro grave (E2–D#3) → Viterbi com viés de permanência | baseline clássico de MIR, transparente e sem pesos; o bônus do baixo desempata casos como Fmaj7 (que contém Am inteiro) |
-| Tonalidade | correlação Krumhansl–Kessler com o perfil de chroma; entre a melhor e a relativa, decide o acorde de tônica (abre, fecha, mais tempo) | tonalidades relativas têm as mesmas notas; o perfil sozinho não decide |
+| Tonalidade | correlação Krumhansl–Kessler com o perfil de chroma + fração do tempo de acordes diatônicos à tonalidade; entre a melhor e a relativa, decide o acorde de tônica (abre, fecha, mais tempo) | voicings abertos dobram E/G/B e puxam o perfil para E menor; tonalidades relativas têm as mesmas notas, o perfil sozinho não decide |
 
 **Por que templates e não modelo treinado:** as opções treinadas avaliadas têm
 pesos NonCommercial (madmom), licença AGPL e sem wheel no Windows (Essentia),
@@ -112,10 +112,26 @@ python -m midi_generator.audio accompany guitar.wav --output-dir output
 # opções: --tempo-hint 70  --beats-per-bar 3  --pulse-bass  --constant-tempo  --seed N
 ```
 
-Tools MCP: `analyze_audio_file(path, beats_per_bar?, tempo_hint?)` e
+Tools MCP: `analyze_audio_file(path, beats_per_bar?, tempo_hint?)`,
 `generate_accompaniment_from_audio(path, style="basic", seed, sustain_bass,
-follow_recording, ...)`, que grava em `output/accompaniment/`. Nenhuma das duas
-escreve no Ableton.
+follow_recording, ...)`, que grava em `output/accompaniment/`, e
+`insert_audio_accompaniment_into_ableton(path, bass_track_index,
+drums_track_index, scene_index, ...)`, que cria **dois clips novos** na Session
+View pelo `create_midi_clip` da bridge (sem mudança na bridge):
+
+- análise, compasso (só 4/4 — a bridge recusa outros), geração e validação do
+  Payload v1 acontecem antes de qualquer contato com o Live;
+- preflight: lê a sessão e os dois slots e recusa faixa inexistente ou que não
+  aceita MIDI, cena inexistente, slot ocupado (MIDI ou áudio) e a mesma faixa
+  para baixo e bateria; o `create_midi_clip` também recusa slot ocupado, então
+  nada existente é alterado;
+- se a bateria falhar depois do baixo criado, o erro diz onde está o clip de
+  baixo (que fica, para o usuário manter ou apagar);
+- os clips começam no compasso 1, em beats; a resposta traz o tempo médio
+  (`tempo_bpm`) e o primeiro downbeat da gravação (`first_downbeat_seconds`)
+  para alinhar o áudio: tempo do Live ≈ `tempo_bpm` (ou áudio warpado) e clip
+  de áudio começando no primeiro downbeat. A bridge não mexe em tempo nem em
+  clips de áudio (fora do escopo do v1).
 
 Python:
 
@@ -168,3 +184,11 @@ por compasso; tonalidade; MIDI exportado nos beats da gravação.
    usar `--constant-tempo`, warpar o áudio e alinhar o MIDI ao primeiro downbeat).
 5. Ouvir: bumbo/caixa no tempo, baixo trocando de nota junto com os acordes.
    Registrar aqui o resultado com a gravação usada; só então marcar como validado.
+6. Session View (tool `insert_audio_accompaniment_into_ableton`, Live aberto e
+   `python -m midi_generator.ableton doctor` → `connected`): duas faixas MIDI
+   com slots vazios na mesma cena; chamar a tool com o WAV; conferir que surgem
+   dois clips de `bars × 4` beats, baixo e bateria com o conteúdo esperado, e
+   que nenhum outro clip mudou. Repetir apontando para um slot ocupado e
+   confirmar a recusa sem nenhum clip novo. Ajustar o tempo do Live para o
+   `tempo_bpm` retornado, colocar o WAV numa faixa de áudio começando no
+   `first_downbeat_seconds` e ouvir junto.

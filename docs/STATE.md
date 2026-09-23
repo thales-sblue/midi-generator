@@ -4,9 +4,9 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 23/09/2026 — Ciclo 21 (análise de áudio: gravação →
-`MusicAnalysis` → baixo + bateria pelos geradores existentes, MIDI alinhado à
-gravação; `docs/AUDIO_ANALYSIS.md`).
+Última atualização: 23/09/2026 — Ciclo 22 (`insert_audio_accompaniment_into_ableton`:
+acompanhamento de áudio criado como dois clips novos na Session View pelo
+`create_midi_clip` já validado).
 
 ## Escopo do v1
 
@@ -220,6 +220,9 @@ clips apenas.
 - `create_chord_bed_from_ableton_clip` (Ciclo 14)
 - `create_kick_from_ableton_clip` (Ciclo 16; modos `placement` do Ciclo 18)
 - `create_snare_from_ableton_clip` (Ciclo 20)
+- `insert_audio_accompaniment_into_ableton` (Ciclo 22) — roteiro no item 6 de
+  "Validação" em `docs/AUDIO_ANALYSIS.md`; depende também do gate de gravação
+  real abaixo
 
 Domínio, preflight e orquestração MCP já cobertos por testes; falta conferir a
 escrita no piano roll do Live contra o Ableton real. Ableton indisponível nesta
@@ -647,10 +650,25 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   Suíte 611 verdes. Versão do MCP server: `1.10.0`. Fronteira: gravação real e
   escuta no Live **pendentes** (gate acima). Próximos candidatos: estilos de
   bateria (rock/grunge/punk) como entradas de `DRUM_STYLES` depois de
-  especificados e ouvidos; inserir o acompanhamento em clips do Live pelo
-  `create_midi_clip` já validado; `MIDI → MusicAnalysis` a partir de
+  especificados e ouvidos; [feito no Ciclo 22] inserir o acompanhamento em
+  clips do Live pelo `create_midi_clip` já validado; `MIDI → MusicAnalysis` a partir de
   `analyze_clip`/`bass_line_pitches`; compasso composto (6/8); proveniência
   da análise.
+- [x] **Ciclo 22 — Acompanhamento de áudio como clips da Session View.**
+  `mcp/audio_tools.py::insert_accompaniment_clips` + tool
+  `insert_audio_accompaniment_into_ableton` (MCP `1.11.0`). Só orquestra:
+  análise, recusa de compasso ≠ 4/4, geração e validação do Payload v1 antes de
+  qualquer contato com o Live; preflight por `get_session_state` +
+  `get_midi_clip` (`CLIP_NOT_FOUND` = vazio) recusa faixa/cena inexistente,
+  faixa sem MIDI, slot ocupado (MIDI ou áudio) e faixa repetida; depois dois
+  `create_midi_clip` (primitiva já validada no Live). Falha da bateria após o
+  baixo criado vira erro explícito dizendo onde o baixo ficou. Nenhuma mudança
+  na bridge/Remote Script. A resposta traz `tempo_bpm` e
+  `first_downbeat_seconds` para alinhar o áudio (tempo e clips de áudio seguem
+  fora do escopo da bridge). `tests/test_audio_ableton.py` (15: conteúdo dos
+  clips contra o `BridgeDispatcher` real em memória, recusas sem escrita,
+  falha parcial, registro/erros MCP). Payload v1 intacto; bit-exatidão
+  preservada. Suíte 626 verdes. Fronteira: execução no Live **pendente**.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.

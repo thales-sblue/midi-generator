@@ -39,7 +39,7 @@ python -m venv .venv          # ou o python base indicado acima
 pip install -r requirements.txt
 ```
 
-Suíte de testes (611 testes; espelha o GitHub Actions):
+Suíte de testes (626 testes; espelha o GitHub Actions):
 
 ```powershell
 $env:PYTHONPATH = "src"

@@ -43,7 +43,7 @@ from midi_generator.mcp.ableton_transform import (
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.10.0",
+    version="1.11.0",
 )
 
 
@@ -138,6 +138,44 @@ def generate_accompaniment_from_audio(
             tempo_hint=tempo_hint,
         )
     except (FileNotFoundError, ValueError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def insert_audio_accompaniment_into_ableton(
+    path: str,
+    bass_track_index: int,
+    drums_track_index: int,
+    scene_index: int,
+    style: str = "basic",
+    seed: int = 0,
+    sustain_bass: bool = True,
+    beats_per_bar: int | None = None,
+    tempo_hint: float | None = None,
+) -> audio_tools.AccompanimentClipsResult:
+    """Analyse a recording and create a bass clip and a drum clip in Ableton.
+
+    Both clips are new Session View clips in empty slots of the same scene, on
+    two different MIDI tracks; an occupied slot, a missing or non-MIDI track
+    and a recording not read as 4/4 are refused before anything is written,
+    and no existing clip is ever changed. The clips start on bar 1 in beats:
+    the result says which tempo to set and where the recording's first
+    downbeat is, so the audio can be lined up with them.
+    """
+    try:
+        return audio_tools.insert_accompaniment_clips(
+            path,
+            AbletonClient(),
+            bass_track_index=bass_track_index,
+            drums_track_index=drums_track_index,
+            scene_index=scene_index,
+            style=style,
+            seed=seed,
+            sustain_bass=sustain_bass,
+            beats_per_bar=beats_per_bar,
+            tempo_hint=tempo_hint,
+        )
+    except (FileNotFoundError, ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error
 
 
