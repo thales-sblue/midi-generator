@@ -3,11 +3,12 @@
 import pytest
 
 from midi_generator.ableton import AbletonCommandError
-from midi_generator.generation.drums import KICK_PITCH
+from midi_generator.generation.drums import KICK_PITCH, SNARE_PITCH
 from midi_generator.mcp.ableton_transform import (
     create_bass_line_midi_clip_copy,
     create_chord_bed_midi_clip_copy,
     create_kick_midi_clip_copy,
+    create_snare_midi_clip_copy,
 )
 
 
@@ -639,6 +640,174 @@ def test_kick_propagates_bridge_replace_error_without_touching_source():
 
     with pytest.raises(AbletonCommandError) as caught:
         create_kick_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert caught.value.code == "CLIP_CHANGED"
+    assert client.calls[-1][1:4] == (0, 1, "copy")
+    assert not any(
+        call[0] == "replace" and call[1:3] == (0, 0) for call in client.calls
+    )
+
+
+# --- snare ---------------------------------------------------------------------
+
+
+def test_snare_generates_and_replaces_only_protected_copy():
+    client = RecordingClient()
+
+    result = create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert [call[0] for call in client.calls] == [
+        "get",
+        "duplicate",
+        "get",
+        "replace",
+    ]
+    assert client.calls[1] == ("duplicate", 0, 0, 0, 1, "source")
+    assert client.calls[-1][1:4] == (0, 1, "copy")
+    # One-bar 4/4 source: backbeat lands on beats 2 and 4 only.
+    assert [note["start_time"] for note in replaced_notes(client)] == [1.0, 3.0]
+    assert [note["pitch"] for note in replaced_notes(client)] == [SNARE_PITCH] * 2
+    assert all(not note["mute"] for note in replaced_notes(client))
+    assert result["generated"] is True
+    assert result["role"] == "snare"
+    assert result["source_clip_fingerprint"] == "source"
+    assert result["target_clip_fingerprint"] == "generated"
+    assert result["bars"] == 1
+    assert result["root_note"] == "C"
+    assert result["scale"] == "major"
+    assert result["seed"] == 7
+    assert result["velocity"] == 100
+    assert result["placement"] == "backbeat"
+    assert result["snare_count"] == 2
+    assert result["snare_pitch"] == SNARE_PITCH
+    assert result["reference_length_ticks"] == 1920
+
+
+def test_snare_ignores_reference_onsets_entirely():
+    client = RecordingClient(source=offbeat_source())
+
+    result = create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert [note["start_time"] for note in replaced_notes(client)] == [1.0, 3.0]
+    assert result["snare_count"] == 2
+
+
+def test_snare_accepts_a_fully_muted_source():
+    client = RecordingClient(source=muted_source())
+
+    result = create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert [note["start_time"] for note in replaced_notes(client)] == [1.0, 3.0]
+    assert result["snare_count"] == 2
+
+
+def test_snare_never_touches_the_source_clip():
+    original = bass_source()
+    client = RecordingClient(source=bass_source())
+
+    create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert client.source == original
+    assert not any(
+        call[0] == "replace" and call[1:3] == (0, 0) for call in client.calls
+    )
+
+
+def test_snare_is_deterministic_for_same_inputs():
+    first = RecordingClient(source=bass_source())
+    second = RecordingClient(source=bass_source())
+
+    create_snare_midi_clip_copy(first, 0, 0, 0, 1, 120, "C", "major", 3)
+    create_snare_midi_clip_copy(second, 0, 0, 0, 1, 120, "C", "major", 3)
+
+    assert replaced_notes(first) == replaced_notes(second)
+
+
+def test_snare_seed_only_travels_to_metadata_not_content():
+    one = RecordingClient(source=bass_source())
+    other = RecordingClient(source=bass_source())
+
+    result_one = create_snare_midi_clip_copy(one, 0, 0, 0, 1, 120, "C", "major", 1)
+    result_other = create_snare_midi_clip_copy(
+        other, 0, 0, 0, 1, 120, "C", "major", 999
+    )
+
+    assert replaced_notes(one) == replaced_notes(other)
+    assert result_one["seed"] == 1
+    assert result_other["seed"] == 999
+
+
+def test_snare_forwards_velocity_to_generator():
+    client = RecordingClient()
+
+    result = create_snare_midi_clip_copy(
+        client, 0, 0, 0, 1, 120, "C", "major", 7, velocity=55
+    )
+
+    notes = replaced_notes(client)
+    assert notes and all(note["velocity"] == 55 for note in notes)
+    assert result["velocity"] == 55
+
+
+def test_snare_ignores_request_key_for_content():
+    c_major = RecordingClient(source=bass_source())
+    f_minor = RecordingClient(source=bass_source())
+
+    create_snare_midi_clip_copy(c_major, 0, 0, 0, 1, 120, "C", "major", 7)
+    create_snare_midi_clip_copy(f_minor, 0, 0, 0, 1, 120, "F", "minor", 7)
+
+    assert replaced_notes(c_major) == replaced_notes(f_minor)
+
+
+def test_snare_rejects_out_of_range_velocity_before_duplicate():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="velocity must be"):
+        create_snare_midi_clip_copy(
+            client, 0, 0, 0, 1, 120, "C", "major", 7, velocity=0
+        )
+
+    assert client.calls == [("get", 0, 0)]
+
+
+def test_snare_rejects_same_source_and_target_before_any_read():
+    client = RecordingClient()
+
+    with pytest.raises(ValueError, match="must be different"):
+        create_snare_midi_clip_copy(client, 0, 0, 0, 0, 120, "C", "major", 7)
+
+    assert client.calls == []
+
+
+def test_snare_requires_whole_four_four_bars_before_duplicate():
+    client = RecordingClient(
+        source=bass_source(length_beats=3.0, pitches=(48, 50, 52))
+    )
+
+    with pytest.raises(ValueError, match="whole number of 4/4 bars"):
+        create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert client.calls == [("get", 0, 0)]
+
+
+def test_snare_propagates_clip_changed_from_duplicate():
+    error = AbletonCommandError("CLIP_CHANGED", "source changed")
+    client = RecordingClient(duplicate_error=error)
+
+    with pytest.raises(AbletonCommandError) as caught:
+        create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
+
+    assert caught.value.code == "CLIP_CHANGED"
+    assert [call[0] for call in client.calls] == ["get", "duplicate"]
+    assert not any(call[0] == "replace" for call in client.calls)
+
+
+def test_snare_propagates_bridge_replace_error_without_touching_source():
+    error = AbletonCommandError("CLIP_CHANGED", "copy changed")
+    client = RecordingClient(replace_error=error)
+
+    with pytest.raises(AbletonCommandError) as caught:
+        create_snare_midi_clip_copy(client, 0, 0, 0, 1, 120, "C", "major", 7)
 
     assert caught.value.code == "CLIP_CHANGED"
     assert client.calls[-1][1:4] == (0, 1, "copy")

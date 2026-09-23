@@ -16,12 +16,14 @@ from midi_generator.generation import (
     generate_chord_bed_plan,
     generate_contextual_plan,
     generate_kick_plan,
+    generate_snare_plan,
 )
 from midi_generator.generation.bass_line import DEFAULT_BASS_VELOCITY
 from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
 from midi_generator.generation.drums import (
     DEFAULT_KICK_PLACEMENT,
     DEFAULT_KICK_VELOCITY,
+    DEFAULT_SNARE_VELOCITY,
 )
 from midi_generator.generation.melody import BEATS_PER_BAR
 from midi_generator.integration import (
@@ -160,6 +162,29 @@ class KickClipResult(TypedDict):
     onset_count: int
     kick_count: int
     kick_pitch: int
+    reference_length_ticks: int
+
+
+class SnareClipResult(TypedDict):
+    generated: bool
+    role: str
+    source_track_index: int
+    source_scene_index: int
+    target_track_index: int
+    target_scene_index: int
+    clip_length_beats: float
+    note_count: int
+    source_clip_fingerprint: str
+    target_clip_fingerprint: str
+    bpm: int
+    root_note: str
+    scale: str
+    seed: int
+    bars: int
+    velocity: int
+    placement: str
+    snare_count: int
+    snare_pitch: int
     reference_length_ticks: int
 
 
@@ -491,6 +516,70 @@ def create_kick_midi_clip_copy(
         onset_count=metadata["onset_count"],
         kick_count=metadata["kick_count"],
         kick_pitch=metadata["kick_pitch"],
+        reference_length_ticks=metadata["reference_length_ticks"],
+    )
+
+
+def create_snare_midi_clip_copy(
+    client: AbletonClient,
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    *,
+    velocity: int = DEFAULT_SNARE_VELOCITY,
+) -> SnareClipResult:
+    """Generate a snare backbeat for the source clip into a protected copy.
+
+    The musical work is :func:`generate_snare_plan` — a snare on every
+    off-downbeat quarter note (the 2nd, 4th, ... beat of each bar), a fixed
+    grid derived from the source clip's length and metre; the source's own
+    onsets are not read. This function only reads the source, builds the
+    length-matched request, runs the shared non-destructive pipeline and
+    echoes the plan metadata back. A snare is unpitched, so ``root_note`` and
+    ``scale`` are carried only for provenance continuity and are not inferred.
+    """
+    outcome = _generate_into_protected_copy(
+        client,
+        source_track_index,
+        source_scene_index,
+        target_track_index,
+        target_scene_index,
+        lambda request, source_clip: generate_snare_plan(
+            request,
+            source_clip,
+            velocity=velocity,
+        ),
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+    )
+    metadata = outcome.plan.metadata
+    return SnareClipResult(
+        generated=True,
+        role="snare",
+        source_track_index=source_track_index,
+        source_scene_index=source_scene_index,
+        target_track_index=target_track_index,
+        target_scene_index=target_scene_index,
+        clip_length_beats=outcome.replacement["clip_length_beats"],
+        note_count=outcome.replacement["note_count"],
+        source_clip_fingerprint=outcome.source_fingerprint,
+        target_clip_fingerprint=outcome.replacement["clip_fingerprint"],
+        bpm=bpm,
+        root_note=root_note,
+        scale=scale,
+        seed=seed,
+        bars=outcome.bars,
+        velocity=velocity,
+        placement=metadata["placement"],
+        snare_count=metadata["snare_count"],
+        snare_pitch=metadata["snare_pitch"],
         reference_length_ticks=metadata["reference_length_ticks"],
     )
 

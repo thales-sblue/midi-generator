@@ -14,6 +14,7 @@ from midi_generator.generation.chords import DEFAULT_CHORD_VELOCITY
 from midi_generator.generation.drums import (
     DEFAULT_KICK_PLACEMENT,
     DEFAULT_KICK_VELOCITY,
+    DEFAULT_SNARE_VELOCITY,
 )
 from midi_generator.integration import (
     ClipProfilePayload,
@@ -28,18 +29,20 @@ from midi_generator.mcp.ableton_transform import (
     ChordBedClipResult,
     ContextualVariationResult,
     KickClipResult,
+    SnareClipResult,
     TransformedClipResult,
     create_bass_line_midi_clip_copy,
     create_chord_bed_midi_clip_copy,
     create_contextual_midi_clip_copy,
     create_kick_midi_clip_copy,
+    create_snare_midi_clip_copy,
     transform_midi_clip_copy,
 )
 
 mcp = MCPServer(
     "midi-generator",
     description="Deterministic melody generation exposed as Integration Payload v1.",
-    version="1.8.0",
+    version="1.9.0",
 )
 
 
@@ -312,6 +315,45 @@ def create_kick_from_ableton_clip(
             seed,
             velocity=velocity,
             placement=placement,
+        )
+    except (ValueError, AbletonError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool()
+def create_snare_from_ableton_clip(
+    source_track_index: int,
+    source_scene_index: int,
+    target_track_index: int,
+    target_scene_index: int,
+    bpm: int,
+    root_note: str,
+    scale: str,
+    seed: int,
+    velocity: int = DEFAULT_SNARE_VELOCITY,
+) -> SnareClipResult:
+    """Generate a snare backbeat for a source clip into a protected copy.
+
+    Reads the source MIDI clip, builds a length-matched request and delegates
+    every musical decision to ``generate_snare_plan``: a snare on the 2nd,
+    4th, ... beat of every bar, a fixed grid derived from the clip's length
+    and metre, not from its onsets. The source clip is never overwritten: the
+    snares land only in the empty ``target`` slot after a fingerprint-protected
+    duplication. A snare is unpitched, so ``root_note`` and ``scale`` are
+    carried only for provenance continuity and are not inferred from the clip.
+    """
+    try:
+        return create_snare_midi_clip_copy(
+            AbletonClient(),
+            source_track_index,
+            source_scene_index,
+            target_track_index,
+            target_scene_index,
+            bpm,
+            root_note,
+            scale,
+            seed,
+            velocity=velocity,
         )
     except (ValueError, AbletonError) as error:
         raise ToolError(str(error)) from error

@@ -4,8 +4,8 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 23/09/2026 — Ciclo 19 (`generate_snare_plan`: segunda
-percussão ciente de papel, snare na contramão métrica/backbeat).
+Última atualização: 23/09/2026 — Ciclo 20 (`create_snare_from_ableton_clip`:
+snare exposto ao MCP/Ableton pelo mesmo fluxo não destrutivo do kick).
 
 ## Escopo do v1
 
@@ -166,10 +166,23 @@ clips apenas.
   de referência (`request.bars`/`time_signature` iguais).
   `metadata["generation_mode"] = "snare"`, `placement = "backbeat"`,
   `snare_count`, `snare_pitch`. Flui pelo Payload v1 / exporter / evaluation /
-  provenance como qualquer `CompositionPlan`. Ainda não ligado ao MCP/CLI —
-  wiring Ableton não destrutivo é incremento próprio, atrás do gate do Live
-  (mesmo padrão do kick: Ciclo 15 domínio → Ciclo 16 MCP).
-- Suíte: 464 testes verdes.
+  provenance como qualquer `CompositionPlan`.
+- MCP snare (Ciclo 20): `create_snare_from_ableton_clip` leva
+  `generate_snare_plan` ao mesmo `_generate_into_protected_copy` —
+  `create_snare_midi_clip_copy` em `mcp/ableton_transform.py` só lê o source,
+  monta a requisição (comprimento = clip, 4/4 inteiro), chama o gerador do
+  core e escreve só na cópia protegida por fingerprint. Encaminha `velocity`
+  (default 100) direto ao gerador; nenhum algoritmo/validação musical no MCP.
+  `root_note`/`scale` seguem no request só para proveniência — a tonalidade
+  não é inferida. A resposta (`SnareClipResult`) ecoa `bars`/`velocity` e os
+  metadados do plano (`placement`, `snare_count`, `snare_pitch`,
+  `reference_length_ticks`) sem recalcular. Como a requisição do MCP sempre
+  monta compasso 4/4 inteiro, a recusa de "menos de dois tempos por compasso"
+  do gerador nunca é alcançável por esta tool — permanece só como validação de
+  domínio, exercida diretamente em `test_snare_generation.py`. Payload v1
+  intacto; determinismo bit-exato preservado. Suíte 480 verdes. Fronteira:
+  criação e conteúdo no Live **pendentes de validação manual**. Sem clap/hi-hat;
+  sem CLI de percussão.
 - Integração: `Integration Payload v1` (`schema_version = 1`), conversão
   beats↔ticks.
 - MCP: servidor stdio (`mcp==2.1.1`, `MCPServer`) com `generate_melody`, tools
@@ -190,6 +203,7 @@ clips apenas.
 - `create_bass_line_from_ableton_clip` (Ciclo 14)
 - `create_chord_bed_from_ableton_clip` (Ciclo 14)
 - `create_kick_from_ableton_clip` (Ciclo 16; modos `placement` do Ciclo 18)
+- `create_snare_from_ableton_clip` (Ciclo 20)
 
 Domínio, preflight e orquestração MCP já cobertos por testes; falta conferir a
 escrita no piano roll do Live contra o Ableton real. Ableton indisponível nesta
@@ -210,6 +224,7 @@ Cobertura automatizada conferida neste ciclo (não duplicar):
 | `create_bass_line_from_ableton_clip` | `test_bass_line_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `segment_beats`/`velocity`/`sustain`/`octave`, `CLIP_CHANGED`) | `test_ableton_mcp.py` | idem |
 | `create_chord_bed_from_ableton_clip` | `test_chord_bed_generation.py` | `test_ableton_role_generation.py` (idem + `chord_size`) | `test_ableton_mcp.py` | idem |
 | `create_kick_from_ableton_clip` | `test_kick_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `velocity`/`placement`, grades vs onsets, tonalidade ignorada, `CLIP_CHANGED`, erro do replace) | `test_ableton_mcp.py` (registro, defaults de `velocity`/`placement`, delegação, `placement` inválido, `ToolError`) | idem |
+| `create_snare_from_ableton_clip` | `test_snare_generation.py` | `test_ableton_role_generation.py` (preflight, determinismo, 4/4, source intacto, encaminhamento de `velocity`, onsets da referência ignorados, referência muda aceita, tonalidade ignorada, `CLIP_CHANGED`, erro do replace) | `test_ableton_mcp.py` (registro, default de `velocity`, delegação, `ToolError`) | idem |
 
 Procedimento mínimo para fechar o gate (com Live 12 aberto + Control Surface
 `MidiGeneratorBridge` ativo):
@@ -276,6 +291,28 @@ mesmo fluxo `_generate_into_protected_copy`, também não coberto pelo harness
    `onset_count` continuar descrevendo o source. Repetir com
    `placement="backbeat"` e confirmar a recusa antes de qualquer duplicação
    (nenhum clip novo criado, source intacto).
+
+Procedimento mínimo para o gate de `create_snare_from_ableton_clip` (Ciclo 20) —
+mesmo fluxo `_generate_into_protected_copy`, também não coberto pelo harness
+`mcp.verification`:
+
+1. `python -m midi_generator.ableton doctor` → `connected`.
+2. Numa track MIDI da Session View, criar um clip de referência de N compassos
+   4/4 (qualquer conteúdo — os onsets não são lidos); anotar track/scene
+   (ex.: `0 0`) e deixar `0 4` vazio.
+3. Chamar `create_snare_from_ableton_clip` com `source 0 0`, `target 0 4`,
+   `bpm`/`root_note`/`scale`/`seed` explícitos (ex.: `120 / C / minor / 42`),
+   `velocity` opcional (default 100). `root_note`/`scale` viajam só para
+   proveniência.
+4. Conferir no piano roll: `0 0` idêntico ao original; `0 4` com um snare
+   (`pitch 38`) no 2º e no 4º tempo de cada compasso, nada no 1º/3º, duração
+   encurtada até o próximo snare ou a borda do clip. Conferir que
+   `snare_count` na resposta bate com os snares vistos.
+5. Repetir a chamada com a mesma seed e `velocity` e conferir que o conteúdo é
+   bit a bit igual (comparar `target_clip_fingerprint`). Repetir mudando só
+   `root_note`/`scale` e conferir que o conteúdo não muda.
+6. Repetir a chamada apontando `target` para um slot ocupado e confirmar a recusa
+   (`TARGET_CLIP_SLOT_NOT_EMPTY`), com o source intacto.
 
 ## Gate de escuta do SkyTNT (gate humano, não é ciclo)
 
@@ -539,6 +576,28 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
   Segue o mesmo padrão faseado do kick (Ciclo 15 domínio → Ciclo 16 MCP): não
   ligado à CLI/MCP — o fluxo Ableton não destrutivo é incremento próprio,
   atrás do gate do Live. Clap e hi-hat continuam de fora.
+- [x] **Ciclo 20 — Snare exposto ao MCP/Ableton pelo fluxo não destrutivo
+  compartilhado.** `mcp/ableton_transform.py`: `create_snare_midi_clip_copy` e
+  o TypedDict `SnareClipResult`; `mcp/server.py`: tool
+  `create_snare_from_ableton_clip` (params `source_*`/`target_*`/`bpm`/
+  `root_note`/`scale`/`seed`/`velocity`, default `DEFAULT_SNARE_VELOCITY` =
+  100). O algoritmo musical continua em `generation/drums.py::generate_snare_plan`
+  — o MCP só orquestra, reusando `_generate_into_protected_copy` (mesmo
+  pipeline do kick/baixo/acordes). Source nunca vai a
+  `replace_midi_clip_notes`; a cópia é protegida por fingerprint;
+  `CLIP_CHANGED` propaga. `velocity` é encaminhada direto ao gerador;
+  `root_note`/`scale` seguem no request só para proveniência (tonalidade não é
+  inferida). A resposta ecoa `bars`/`velocity` e os metadados do plano
+  (`placement`, `snare_count`, `snare_pitch`, `reference_length_ticks`) sem
+  recalcular. Como a requisição do MCP sempre monta compasso 4/4 inteiro, a
+  recusa de "menos de dois tempos por compasso" do gerador não é alcançável
+  por esta tool. `tests/test_ableton_role_generation.py` (+13 casos de
+  orquestração) e `tests/test_ableton_mcp.py` (+3: registro/exposição, default
+  de `velocity` e delegação, `ValueError`→`ToolError`). Payload v1 intacto;
+  determinismo bit-exato preservado. Suíte 480 verdes. Versão do MCP server:
+  `1.9.0`. Fronteira: criação e conteúdo no Live **pendentes de validação
+  manual** (roteiro no gate acima). Nenhuma dependência nova; sem CLI de
+  snare; sem clap/hi-hat.
 2. **Acento métrico no heurístico** — 3/4 e 6/8 hoje só diferem no comprimento
    do compasso e no MetaMessage; modelar agrupamento de acentos (2×3 vs 3×2) é
    incremento próprio.
@@ -551,6 +610,6 @@ continua sendo gate humano. Até lá: `investigar`, sem backend no runtime.
    nos Ciclos 17-18] Modos de colocação do kick (`downbeat_only`,
    `four_on_floor`) como parâmetro `placement` de `generate_kick_plan`,
    encaminhado por `create_kick_from_ableton_clip` pelo fluxo
-   `_generate_into_protected_copy`; resta a conferência no Live. (d) Fluxo MCP
-   não destrutivo para `generate_snare_plan`, espelhando `create_kick_from_ableton_clip`
-   (atrás do gate do Live) — próximo incremento natural.
+   `_generate_into_protected_copy`; resta a conferência no Live. (d) [feito no
+   Ciclo 20] Fluxo MCP não destrutivo para `generate_snare_plan`, espelhando
+   `create_kick_from_ableton_clip`; resta a conferência no Live.
