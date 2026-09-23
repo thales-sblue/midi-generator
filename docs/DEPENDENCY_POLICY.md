@@ -78,6 +78,57 @@ Fontes primárias consultadas:
 - Dados de proveniência limpa: [PDMX](https://github.com/pnlong/PDMX)
 - Bibliotecas: [music21](https://music21.org/music21docs/about/about.html), [MusPy](https://github.com/salu133445/muspy), [MidiTok](https://github.com/Natooz/MidiTok)
 
+## Análise de áudio — 23 de setembro de 2026
+
+```text
+Nome: librosa (+ dependências transitivas)
+Função: análise de áudio local — onset/beat tracking, chroma CQT, HPSS e
+  Viterbi, usados por src/midi_generator/audio (docs/AUDIO_ANALYSIS.md)
+Código e versão/revisão: librosa 0.11.0 (faixa >=0.11,<0.12 no requirements)
+Pesos e versão/revisão: nenhum — o módulo não carrega modelo treinado
+Dataset/proveniência: não aplicável (os dados de exemplo do librosa, baixados
+  via pooch sob demanda, não são usados)
+Licença do código: librosa ISC. Transitivas (metadados do pip nesta máquina):
+  numpy BSD-3, scipy BSD-3, numba BSD-2, llvmlite BSD-2 (embute LLVM,
+  Apache-2.0 com exceção LLVM), scikit-learn BSD-3, soundfile BSD-3 (embute
+  libsndfile, LGPL-2.1), soxr LGPL-2.1-or-later, audioread MIT, pooch BSD-3,
+  joblib BSD-3, msgpack Apache-2.0, lazy_loader BSD-3, decorator BSD-2,
+  threadpoolctl BSD-3
+Licença dos pesos: não aplicável
+Restrições dos outputs: nenhuma — a análise é medição do áudio do usuário
+Uso comercial permitido: sim. As duas bibliotecas LGPL (libsndfile, soxr) são
+  ligadas dinamicamente; redistribuir o runtime empacotado exige cumprir a
+  LGPL (permitir substituição da biblioteca, fornecer a licença)
+Executa localmente: sim
+Funciona offline após download: sim (nada é baixado na análise)
+API paga necessária: não
+Hardware medido: CPU desta máquina (Windows 11). ~1–2 s por gravação de 20–30 s
+  após o primeiro uso; a primeira execução compila funções numba (~40 s) e
+  guarda o cache em __pycache__
+Motivo para inclusão: tempo, posição dos beats, chroma e acordes a partir de
+  gravação — capacidade madura que não deve ser reimplementada
+O que substitui: nada (capacidade nova)
+Riscos: scipy 1.18.1 teve a DLL bloqueada pelo Controle de Aplicativo do
+  Windows desta máquina, por isso scipy <1.17; numba/llvmlite pesam na
+  instalação; o erro de oitava de tempo é inerente ao beat tracking
+  (mitigado por tempo_hint)
+Fontes primárias e data da verificação: metadados dos pacotes instalados
+  (pip show / importlib.metadata) em 23/09/2026; https://github.com/librosa/librosa
+Decisão: aprovado para o runtime (camada audio/ apenas)
+Responsável/data da decisão: ciclo de análise de áudio, 23/09/2026
+```
+
+Alternativas avaliadas para acordes/beats (23/09/2026, nesta máquina):
+
+| Candidato | Código | Pesos/dados | Situação | Decisão |
+| --- | --- | --- | --- | --- |
+| madmom | BSD (código) | modelos declarados CC BY-NC-SA 4.0 pelo projeto (a reconfirmar na fonte) | só sdist 0.16.1 (2018) no PyPI, sem wheel para Python 3.12/Windows | rejeitado: pesos NonCommercial e build inviável |
+| Essentia | AGPL-3.0 | vários modelos TF com termos próprios | `pip download essentia` sem distribuição para Windows/Python 3.12 | rejeitado: AGPL e indisponível no Windows |
+| Chordino / NNLS Chroma | plugin Vamp (GPL, a reconfirmar) | sem pesos | exige host Vamp; binário nativo | rejeitado para o runtime |
+| autochord | MIT (metadado) | modelo próprio | exige TensorFlow; embute `nnls-chroma.so` só para Linux | rejeitado |
+| crema | ISC | modelo pré-treinado incluído | exige Keras + TensorFlow; projeto sem atividade recente | congelado |
+| basic-pitch (Spotify) | Apache-2.0 declarado | modelo incluído | exige TensorFlow <2.15.1 no Windows; transcreve notas, não acordes | candidato futuro para transcrever riffs/melodias, não para esta etapa |
+
 ## Proveniência mínima de uma geração futura
 
 Um novo contrato versionado deverá poder relacionar, sem alterar o Payload v1:
