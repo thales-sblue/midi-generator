@@ -444,6 +444,21 @@ python -m midi_generator.ableton doctor
 
 O doctor verifica o endpoint, conecta ao bridge, executa `ping` e mostra a versão que o próprio Live reportar. Live fechado, script não instalado ou Control Surface inativo são apresentados como bridge indisponível, sem traceback.
 
+### Transporte (play, stop e loop do Arrangement)
+
+Para ouvir o arranjo sem mexer na tela do Live, o bridge controla o transporte. Compassos em 4/4, contados a partir de 1:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m midi_generator.ableton transport loop 1 12   # liga o loop nos compassos 1 a 12
+python -m midi_generator.ableton transport play        # toca a partir do início do loop
+python -m midi_generator.ableton transport play --from-bar 9
+python -m midi_generator.ableton transport stop
+python -m midi_generator.ableton transport status
+```
+
+Os comandos do bridge são `get_transport`, `set_loop` (`start_beats`, `length_beats`), `play` (`from_beats` opcional) e `stop`, e cada um devolve o estado depois da operação. O `play` desliga o "Back to Arrangement" (clips da Session lançados antes deixariam de sobrepor o arranjo), começa a tocar e então posiciona a agulha: o Live 12 ignora `current_song_time` com o transporte parado.
+
 ### Tools MCP
 
 `get_ableton_session` não recebe argumentos. Ela retorna apenas tracks, com `index`, `name` e `can_hold_midi`, e scenes, com `index` e `name`.
@@ -472,7 +487,7 @@ duration = duration_ticks / ticks_per_beat
 clip_length = total_duration_ticks / ticks_per_beat
 ```
 
-O Remote Script usa `ClipSlot.create_clip()` e objetos `Live.Clip.MidiNoteSpecification` com `Clip.add_new_notes()`. A integração cobre clips MIDI na Session View; não controla transporte e não cria tracks, instrumentos ou devices.
+O Remote Script usa `ClipSlot.create_clip()` e objetos `Live.Clip.MidiNoteSpecification` com `Clip.add_new_notes()`. A integração cobre clips MIDI na Session View e o transporte (play, stop e loop); não cria tracks, instrumentos ou devices.
 
 ### Leitura, edição e transformação segura de clips MIDI
 

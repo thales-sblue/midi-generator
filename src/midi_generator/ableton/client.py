@@ -96,6 +96,23 @@ class AbletonClient:
             params,
         )
 
+    def get_transport(self) -> dict[str, Any]:
+        return self._call("get_transport", {})
+
+    def set_loop(self, start_beats: float, length_beats: float) -> dict[str, Any]:
+        return self._call(
+            "set_loop", {"start_beats": start_beats, "length_beats": length_beats}
+        )
+
+    def play(self, from_beats: float | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if from_beats is not None:
+            params["from_beats"] = from_beats
+        return self._call("play", params)
+
+    def stop(self) -> dict[str, Any]:
+        return self._call("stop", {})
+
     def _call(self, command: str, params: dict[str, Any]) -> dict[str, Any]:
         request = make_request(command, params)
         try:

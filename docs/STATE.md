@@ -4,7 +4,21 @@ Fonte de contexto do Protocolo para "continue". Atualize a cada ciclo. Detalhe
 de direção e regras fica em [`../AGENTS.md`](../AGENTS.md); ambiente local em
 [`../CLAUDE.md`](../CLAUDE.md).
 
-Última atualização: 23/09/2026 — Ciclo 22 (`insert_audio_accompaniment_into_ableton`:
+Última atualização: 25/10/2026 — transporte no bridge (`get_transport`,
+`set_loop`, `play`, `stop` + `python -m midi_generator.ableton transport`),
+pedido explícito do usuário para ouvir o arranjo sem tocar na tela. Fora do
+escopo do v1 (transporte é pós-v1); não muda o percentual do v1.
+**Validado no Live 12 Lite** em 25/10/2026: `transport loop`, `stop`, `status`
+e `play` no Arrangement do DriveIn. Achado: com o transporte parado o Live
+ignora `current_song_time` (a 1ª versão tocava de onde a agulha estava). O
+`play` agora começa a tocar e depois posiciona; essa ordem está instalada mas
+**pendente de validação no Live** (precisa reiniciar o Live para carregar o
+Remote Script). Até lá, chamar `play` duas vezes funciona: com o transporte
+rodando, o reposicionamento é aceito. Conferência: com o transporte parado
+fora do loop, `transport loop 1 8` + um único `transport play` → `status` deve
+mostrar a posição dentro dos compassos 1–8.
+
+Ciclo anterior: 23/09/2026 — Ciclo 22 (`insert_audio_accompaniment_into_ableton`:
 acompanhamento de áudio criado como dois clips novos na Session View pelo
 `create_midi_clip` já validado).
 

@@ -88,6 +88,19 @@ class FakeSong:
     def __init__(self, track=None):
         self.tracks = [track or FakeTrack()]
         self.scenes = [FakeScene()]
+        self.is_playing = False
+        self.loop = False
+        self.loop_start = 0.0
+        self.loop_length = 16.0
+        self.current_song_time = 0.0
+        self.tempo = 86.0
+        self.back_to_arranger = True
+
+    def continue_playing(self):
+        self.is_playing = True
+
+    def stop_playing(self):
+        self.is_playing = False
 
 
 class FakeLiveContext:
@@ -161,6 +174,86 @@ def test_bridge_rejects_unsupported_payload(field, value, code):
         payload_to_clip_data(payload)
 
     assert caught.value.code == code
+
+
+def test_set_loop_enables_arrangement_loop():
+    context = FakeLiveContext()
+
+    result = BridgeDispatcher(context).dispatch(
+        {"request_id": "l", "command": "set_loop", "params": {"start_beats": 32, "length_beats": 64}}
+    )["result"]
+
+    song = context.song()
+    assert (song.loop, song.loop_start, song.loop_length) == (True, 32.0, 64.0)
+    assert result["loop"] is True
+    assert result["loop_start_beats"] == 32.0
+    assert result["loop_length_beats"] == 64.0
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"start_beats": -1, "length_beats": 4},
+        {"start_beats": 0, "length_beats": 0},
+        {"start_beats": True, "length_beats": 4},
+        {"length_beats": 4},
+    ],
+)
+def test_set_loop_rejects_invalid_range_without_mutation(params):
+    context = FakeLiveContext()
+
+    with pytest.raises(BridgeCommandError) as caught:
+        BridgeDispatcher(context).dispatch({"request_id": "l", "command": "set_loop", "params": params})
+
+    assert caught.value.code == "INVALID_REQUEST"
+    assert context.song().loop is False
+
+
+def test_play_starts_at_loop_start_and_returns_to_arrangement():
+    context = FakeLiveContext()
+    song = context.song()
+    song.loop, song.loop_start, song.current_song_time = True, 32.0, 100.0
+
+    result = BridgeDispatcher(context).dispatch({"request_id": "p", "command": "play", "params": {}})["result"]
+
+    assert song.back_to_arranger is False
+    assert song.current_song_time == 32.0
+    assert result["is_playing"] is True
+
+
+def test_play_from_explicit_position_and_stop():
+    context = FakeLiveContext()
+    dispatcher = BridgeDispatcher(context)
+
+    dispatcher.dispatch({"request_id": "p", "command": "play", "params": {"from_beats": 8}})
+    assert context.song().current_song_time == 8.0
+    stopped = dispatcher.dispatch({"request_id": "s", "command": "stop", "params": {}})["result"]
+
+    assert stopped["is_playing"] is False
+
+
+def test_play_rejects_negative_position_without_starting():
+    context = FakeLiveContext()
+
+    with pytest.raises(BridgeCommandError):
+        BridgeDispatcher(context).dispatch({"request_id": "p", "command": "play", "params": {"from_beats": -4}})
+
+    assert context.song().is_playing is False
+
+
+def test_get_transport_reports_state():
+    result = BridgeDispatcher(FakeLiveContext()).dispatch(
+        {"request_id": "t", "command": "get_transport", "params": {}}
+    )["result"]
+
+    assert result == {
+        "is_playing": False,
+        "loop": False,
+        "loop_start_beats": 0.0,
+        "loop_length_beats": 16.0,
+        "current_beats": 0.0,
+        "tempo": 86.0,
+    }
 
 
 def test_dispatcher_ping_and_minimal_session_state():

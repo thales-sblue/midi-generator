@@ -126,6 +126,14 @@ class BridgeDispatcher:
             result = self._replace_midi_clip_notes(params)
         elif command == "duplicate_midi_clip":
             result = self._duplicate_midi_clip(params)
+        elif command == "get_transport":
+            result = _transport_state(self._live.song())
+        elif command == "set_loop":
+            result = self._set_loop(params)
+        elif command == "play":
+            result = self._play(params)
+        elif command == "stop":
+            result = self._stop()
         else:
             raise BridgeCommandError(
                 "UNKNOWN_COMMAND", "Unknown command: {}".format(command)
@@ -270,6 +278,45 @@ class BridgeDispatcher:
         result["source_scene_index"] = source_scene_index
         return result
 
+    def _set_loop(self, params):
+        start = params.get("start_beats")
+        length = params.get("length_beats")
+        if not _non_negative_number(start):
+            raise BridgeCommandError(
+                "INVALID_REQUEST", "start_beats must be a non-negative number."
+            )
+        if not _positive_number(length):
+            raise BridgeCommandError(
+                "INVALID_REQUEST", "length_beats must be a positive number."
+            )
+        song = self._live.song()
+        song.loop_start = float(start)
+        song.loop_length = float(length)
+        song.loop = True
+        return _transport_state(song)
+
+    def _play(self, params):
+        start = params.get("from_beats")
+        if start is not None and not _non_negative_number(start):
+            raise BridgeCommandError(
+                "INVALID_REQUEST", "from_beats must be a non-negative number."
+            )
+        song = self._live.song()
+        # Session clips launched earlier override the Arrangement until this is cleared.
+        song.back_to_arranger = False
+        # Live 12 ignores current_song_time while stopped, so start first and then jump.
+        song.continue_playing()
+        if start is not None:
+            song.current_song_time = float(start)
+        elif bool(song.loop):
+            song.current_song_time = float(song.loop_start)
+        return _transport_state(song)
+
+    def _stop(self):
+        song = self._live.song()
+        song.stop_playing()
+        return _transport_state(song)
+
     def _require_midi_clip(self, track_index, scene_index):
         slot = self._require_slot(track_index, scene_index)
         if not bool(slot.has_clip):
@@ -315,6 +362,17 @@ def _clip_snapshot(clip, track_index, scene_index):
     }
     result["clip_fingerprint"] = _clip_fingerprint(length, notes)
     return result
+
+
+def _transport_state(song):
+    return {
+        "is_playing": bool(song.is_playing),
+        "loop": bool(song.loop),
+        "loop_start_beats": _normalized_float(song.loop_start),
+        "loop_length_beats": _normalized_float(song.loop_length),
+        "current_beats": _normalized_float(song.current_song_time),
+        "tempo": _normalized_float(song.tempo),
+    }
 
 
 def _note_to_dict(note):
